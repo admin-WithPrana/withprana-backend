@@ -13,7 +13,7 @@ const startServer = async () => {
   setupRoutes(app, { pgClient,pgRepository, mongoRepository, mailer });
 
   try {
-    await app.listen({ port: 3000, host: 'localhost' });
+    await app.listen({ port: 3000, host: '0.0.0.0' });
     app.log.info(`Server listening on ${app.server.address().port}`);
   } catch (err) {
     app.log.error(err);
