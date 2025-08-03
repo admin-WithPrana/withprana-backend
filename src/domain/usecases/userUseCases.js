@@ -24,6 +24,8 @@ export class UserUseCases {
       throw new Error('User already exists');
     }
 
+    console.log("user", user);
+
     const createdUser = await this.userRepository.create(user);
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -33,8 +35,10 @@ export class UserUseCases {
       email: user.email,
       otpcode: otpCode,
       expires_at: expiresAt,
-      isValid: true
+      isvalid: true
     });
+
+    console.log("otp", otp);
 
     await this.otpRepository.createOTP(otp);
 
