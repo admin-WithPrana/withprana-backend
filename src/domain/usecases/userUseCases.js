@@ -7,38 +7,81 @@ export class UserUseCases {
     this.mailer = mailer;
   }
 
+  // async registerUser(userData) {
+  //   const user = new User({
+  //     email: userData.email,
+  //     name: userData.name,
+  //     password: null
+  //   });
+
+  //   user.validate();
+
+  //   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  //   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  //   const otp = new OTP({
+  //     email: user.email,
+  //     otpcode: otpCode,
+  //     expires_at: expiresAt,
+  //     isvalid: true
+  //   });
+
+  //   const existingUser = await this.userRepository.findByEmail(user.email);
+
+  //   if (existingUser) {
+  //     await this.otpRepository.createOTP(otp);
+  //     // throw new Error('User already exists');
+  //   }
+
+  //   const createdUser = await this.userRepository.create(user);
+
+  //   await this.otpRepository.createOTP(otp);
+
+  //   await this.sendOTPEmail(user.email, otpCode);
+
+  //   return createdUser;
+  // }
   async registerUser(userData) {
     const user = new User({
       email: userData.email,
       name: userData.name,
       password: null
     });
-
+  
     user.validate();
-
-    const existingUser = await this.userRepository.findByEmail(user.email);
-    if (existingUser) {
-      throw new Error('User already exists');
-    }
-
-    const createdUser = await this.userRepository.create(user);
-
+  
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
+  
     const otp = new OTP({
       email: user.email,
       otpcode: otpCode,
       expires_at: expiresAt,
       isvalid: true
     });
-
+  
+    const existingUser = await this.userRepository.findByEmail(user.email);
+  
+    if (existingUser) {
+      if (existingUser.active === true) {
+        await this.otpRepository.createOTP(otp);
+        await this.sendOTPEmail(existingUser.email, otpCode);
+        return existingUser;
+      } else {
+        await this.otpRepository.createOTP(otp);
+        await this.sendOTPEmail(existingUser.email, otpCode);
+        return existingUser;
+      }
+    }
+  
+    const createdUser = await this.userRepository.create(user);
+  
     await this.otpRepository.createOTP(otp);
-
     await this.sendOTPEmail(user.email, otpCode);
-
+  
     return createdUser;
   }
+  
 
   async resendOTP(email) {
     const user = await this.userRepository.findByEmail(email);
@@ -92,5 +135,21 @@ export class UserUseCases {
     };
 
     await this.mailer.sendMail(mailOptions);
+  }
+
+  async getUsers() {
+    return this.userRepository.findAll();
+  }
+
+  async getUserById(id) {
+    return this.userRepository.findById(id);
+  }
+
+  async deactivateUser(id) {
+    return this.userRepository.update(id, { active: false });
+  }
+
+  async activateUser(id) {
+    return this.userRepository.update(id, { active: true });
   }
 }

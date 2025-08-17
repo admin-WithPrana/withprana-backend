@@ -8,7 +8,6 @@ export class PrismaUserRepository {
       where: { email: email.toLowerCase() }
     });
   }
-  
 
   async create(user) {
     return this.prisma.user.create({ 
@@ -21,13 +20,48 @@ export class PrismaUserRepository {
 
   async verifyEmail(email) {
     return this.prisma.user.update({
-      where: { 
-        email: email.toLowerCase() 
-      },
+      where: { email: email.toLowerCase() },
       data: { 
         isVerified: true,
-        active:true
+        active: true
       },
     });
   }
-} 
+
+  async findAll() {
+    const users = await this.prisma.user.findMany();
+    return users.map(user => ({
+      ...user,
+      id: Number(user.id)
+    }));
+  }
+  
+
+  async findById(id) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: Number(id) }
+    });
+  
+    if (!user) return null;
+  
+    return {
+      ...user,
+      id: user.id.toString(),
+    };
+  }
+  
+
+  async update(id, data) {
+    const user = await this.prisma.user.update({
+      where: { id: Number(id) },
+      data
+    });
+
+    if (!user) return null;
+  
+    return {
+      ...user,
+      id: user.id.toString(),
+    };
+  }
+}

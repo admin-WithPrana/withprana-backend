@@ -12,7 +12,6 @@ export class UserController {
       const user = await this.userUseCases.registerUser(userDTO);
       return reply.code(201).send({
         success: true,
-        // data: { id: user.id, email: user.email },
         message: 'Check your email for OTP'
       });
     } catch (error) {
