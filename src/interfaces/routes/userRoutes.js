@@ -1,12 +1,11 @@
 import { UserController } from '../controllers/userController.js';
 import { PostgresOTPRepository } from '../../infrastructure/databases/postgres/otpRepository.js';
 
-export const setupRoutes = (app, { pgClient, pgRepository, mongoRepository, mailer }) => {
-  console.log(pgClient)
-  const otpRepo = new PostgresOTPRepository(pgClient);
+export const setupRoutes = (app, { prismaRepository, mongoRepository, mailer }) => {
+  const otpRepo = new PostgresOTPRepository(prismaRepository.prisma);
 
   const userController = new UserController(
-    pgRepository,
+    prismaRepository,
     otpRepo,
     mailer
   );

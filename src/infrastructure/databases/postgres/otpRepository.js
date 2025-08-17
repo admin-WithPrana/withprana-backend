@@ -2,40 +2,41 @@ import { OTPRepository } from '../../../domain/repositories/userRepository.js';
 import { OTP } from '../../../domain/entities/user.js';
 
 export class PostgresOTPRepository extends OTPRepository {
-  constructor(sql) {
+  constructor(prisma) {
     super();
-    this.sql = sql;
+    this.prisma = prisma;
   }
 
   async createOTP(otp) {
-    await this.sql`
-      INSERT INTO otps (email, otpcode, expires_at,isvalid)
-      VALUES (${otp.email}, ${otp.otpcode}, ${otp.expires_at}, ${otp.isvalid})
-    `;
+    await this.prisma.otps.create({
+      data: {
+        email: otp.email,
+        otpcode: otp.otpcode,
+        expires_at: otp.expires_at,
+        isvalid: otp.isvalid,
+      },
+    });
   }
 
   async findOTPByEmail(email) {
-    const result = await this.sql`
-      SELECT * FROM otps 
-      WHERE email = ${email} 
-      ORDER BY expires_at DESC 
-      LIMIT 1
-    `;
-  
-    return result.length ? new OTP(result[0]) : null;
+    const result = await this.prisma.otps.findFirst({
+      where: { email },
+      orderBy: { expires_at: 'desc' },
+    });
+
+    return result ? new OTP(result) : null;
   }
-  
 
   async deleteOTP(email) {
-    await this.sql`
-      DELETE FROM otps WHERE email = ${email}
-    `;
+    await this.prisma.otps.deleteMany({
+      where: { email },
+    });
   }
 
   async updateOTP(email, isValid) {
-    console.log(email, isValid, "email and isValid");
-    await this.sql`
-      UPDATE otps SET isvalid = ${isValid} WHERE email = ${email}
-    `;
+    await this.prisma.otps.updateMany({
+      where: { email },
+      data: { isvalid: isValid },
+    });
   }
 }

@@ -1,30 +1,32 @@
-import { UserRepository } from '../../../domain/repositories/userRepository.js';
-
-export class PostgresUserRepository extends UserRepository {
-  constructor(sql) {
-    super();
-    this.sql = sql;
-  }
-
-  async create(user) {
-    const result = await this.sql`
-      INSERT INTO users (id, name, email, password, is_verified)
-      VALUES (${user.id}, ${user.name}, ${user.email}, ${user.password}, ${user.isVerified})
-      RETURNING *;
-    `;
-    return result[0];
+export class PrismaUserRepository {
+  constructor(prisma) {
+    this.prisma = prisma;
   }
 
   async findByEmail(email) {
-    const result = await this.sql`
-      SELECT * FROM users WHERE email = ${email} LIMIT 1
-    `;
-    return result[0] || null;
+    return this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    });
+  }
+  
+
+  async create(user) {
+    return this.prisma.user.create({ 
+      data: {
+        ...user,
+        email: user.email.toLowerCase(),
+      } 
+    });
   }
 
   async verifyEmail(email) {
-    await this.sql`
-      UPDATE users SET is_verified = TRUE WHERE email = ${email}
-    `;
+    return this.prisma.user.update({
+      where: { 
+        email: email.toLowerCase() 
+      },
+      data: { 
+        isVerified: true // Match your schema's snake_case
+      },
+    });
   }
-}
+} 

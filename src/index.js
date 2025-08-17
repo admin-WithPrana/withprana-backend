@@ -6,14 +6,14 @@ import { initializeMailer } from './config/mail.js';
 const startServer = async () => {
   const app = fastify({ logger: true });
 
-  const { pgClient,pgRepository, mongoRepository } = await initializeDatabaseConnections();
+  const { prisma, prismaRepository, mongoRepository } = await initializeDatabaseConnections();
 
   const mailer = initializeMailer();
 
-  setupRoutes(app, { pgClient,pgRepository, mongoRepository, mailer });
+  setupRoutes(app, { prisma, prismaRepository, mongoRepository, mailer });
 
   try {
-    await app.listen({ port: 3000, host: '0.0.0.0' });
+    await app.listen({ port: process.env.PORT, host: '0.0.0.0' });
     app.log.info(`Server listening on ${app.server.address().port}`);
   } catch (err) {
     app.log.error(err);

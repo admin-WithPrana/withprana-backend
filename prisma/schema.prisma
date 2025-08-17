@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         BigInt   @id @default(autoincrement())
+  created_at DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  name       String?  @map("name")
+  email      String   @unique @map("email")
+  password   String?  @map("password")
+  isVerified Boolean  @default(false)
+  active     Boolean  @default(false)
+
+  @@map("users")
+}
+
+model otps {
+  id         Int      @id @default(autoincrement())
+  email      String
+  otpcode    String
+  expires_at DateTime
+  isvalid    Boolean  @default(true)
+}

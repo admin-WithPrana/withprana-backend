@@ -1,30 +1,29 @@
-import postgres from 'postgres';
+// src/config/database.js
+import { PrismaClient } from '@prisma/client';
 import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
-import { PostgresUserRepository } from '../infrastructure/databases/postgres/userRepository.js';
+import { PrismaUserRepository } from '../infrastructure/databases/Postgres/userRepository.js';
 import { MongoUserRepository } from '../infrastructure/databases/mongo/userRepository.js';
 
 dotenv.config();
 
-let pgClient;
+let prisma;
 let mongoClient;
 
 export const initializeDatabaseConnections = async () => {
   try {
-    const connectionString = process.env.DATABASE_URL;
-    pgClient = postgres(connectionString, { idle_timeout: 20 });
+    prisma = new PrismaClient();
+    await prisma.$connect();
+    console.log('✅ Connected to Postgres via Prisma');
 
     const mongoUrl = process.env.MONGO_URL || 'mongodb://127.0.0.1:27017';
-    mongoClient = new MongoClient(mongoUrl, {
-      serverSelectionTimeoutMS: 5000,
-    });
-
+    mongoClient = new MongoClient(mongoUrl, { serverSelectionTimeoutMS: 5000 });
     await mongoClient.connect();
     console.log('✅ Connected to MongoDB');
 
     return {
-      pgClient,
-      pgRepository: new PostgresUserRepository(pgClient),
+      prisma,
+      prismaRepository: new PrismaUserRepository(prisma),
       mongoRepository: new MongoUserRepository(mongoClient),
     };
   } catch (err) {
@@ -35,11 +34,10 @@ export const initializeDatabaseConnections = async () => {
 
 export const closeDatabaseConnections = async () => {
   try {
-    if (pgClient) {
-      await pgClient.end({ timeout: 5 });
-      console.log('✅ PostgreSQL connection closed');
+    if (prisma) {
+      await prisma.$disconnect();
+      console.log('✅ Prisma connection closed');
     }
-
     if (mongoClient) {
       await mongoClient.close();
       console.log('✅ MongoDB connection closed');

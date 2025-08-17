@@ -1,5 +1,4 @@
 import { User, OTP } from '../entities/user.js';
-import { v4 as uuidv4 } from 'uuid';
 
 export class UserUseCases {
   constructor(userRepository, otpRepository, mailer) {
@@ -10,10 +9,8 @@ export class UserUseCases {
 
   async registerUser(userData) {
     const user = new User({
-      id: uuidv4(),
       email: userData.email,
       name: userData.name,
-      isVerified: null,
       password: null
     });
 
@@ -23,8 +20,6 @@ export class UserUseCases {
     if (existingUser) {
       throw new Error('User already exists');
     }
-
-    console.log("user", user);
 
     const createdUser = await this.userRepository.create(user);
 
@@ -37,8 +32,6 @@ export class UserUseCases {
       expires_at: expiresAt,
       isvalid: true
     });
-
-    console.log("otp", otp);
 
     await this.otpRepository.createOTP(otp);
 
