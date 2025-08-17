@@ -25,7 +25,8 @@ export class PrismaUserRepository {
         email: email.toLowerCase() 
       },
       data: { 
-        isVerified: true // Match your schema's snake_case
+        isVerified: true,
+        active:true
       },
     });
   }

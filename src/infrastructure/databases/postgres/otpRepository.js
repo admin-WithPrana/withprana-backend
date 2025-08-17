@@ -36,7 +36,7 @@ export class PostgresOTPRepository extends OTPRepository {
   async updateOTP(email, isValid) {
     await this.prisma.otps.updateMany({
       where: { email },
-      data: { isvalid: isValid },
+      data: { isvalid: isValid},
     });
   }
 }

@@ -19,7 +19,7 @@ export class MongoUserRepository extends UserRepository {
   async verifyEmail(email) {
     await this.collection.updateOne(
       { email },
-      { $set: { isVerified: true } }
+      { $set: { isVerified: true,active:true} }
     );
   }
 }
