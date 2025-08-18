@@ -5,6 +5,10 @@ import { initializeMailer } from './config/mail.js';
 
 const startServer = async () => {
   const app = fastify({ logger: true });
+  BigInt.prototype.toJSON = function() {
+    return this.toString();
+  };
+  
 
   const { prisma, prismaRepository, mongoRepository } = await initializeDatabaseConnections();
   const mailer = initializeMailer();

@@ -13,5 +13,5 @@ export const setupRoutes = (app, { prismaRepository, mongoRepository, mailer }) 
   app.post('/register', (request, reply) => userController.register(request, reply));
   app.post('/verify', (request, reply) => userController.verify(request, reply));
   app.post('/resend-otp', (request, reply) => userController.resendOTP(request, reply));
-  
+  app.post('/login', (request, reply) => userController.login(request, reply));
 };

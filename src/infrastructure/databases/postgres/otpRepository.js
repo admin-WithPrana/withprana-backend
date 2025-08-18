@@ -24,7 +24,11 @@ export class PostgresOTPRepository extends OTPRepository {
       orderBy: { expires_at: 'desc' },
     });
 
-    return result ? new OTP(result) : null;
+    // return result ? new OTP(result) : null;
+    return {
+      ...result,
+      id:result.id.toString()
+    }
   }
 
   async deleteOTP(email) {
@@ -34,9 +38,12 @@ export class PostgresOTPRepository extends OTPRepository {
   }
 
   async updateOTP(email, isValid) {
-    await this.prisma.otps.updateMany({
+    const result = await this.prisma.otps.updateMany({
       where: { email },
-      data: { isvalid: isValid},
+      data: { isvalid: isValid },
     });
+    console.log(result)
+    return { ...result, count: Number(result.count) }; 
   }
+  
 }

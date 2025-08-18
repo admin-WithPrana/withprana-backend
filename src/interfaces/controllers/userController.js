@@ -25,11 +25,17 @@ export class UserController {
   async verify(request, reply) {
     try {
       const verifyDTO = new VerifyUserDTO(request.body);
-      await this.userUseCases.verifyUser(verifyDTO.email, verifyDTO.otp);
+     const result =  await this.userUseCases.verifyUser(verifyDTO.email, verifyDTO.otp);
+      
+     if(result.success){
       return reply.code(200).send({
         success: true,
-        message: 'Email verified successfully'
+        message: result.message,
+        token:result.token
       });
+     }
+
+     return reply.code(400).send({success:result.success,message:result.message})
     } catch (error) {
       return reply.code(400).send({
         success: false,
@@ -53,4 +59,19 @@ export class UserController {
       });
     }
   }
+
+  async login(request, reply) {
+    try {
+      const userDTO = new CreateUserDTO(request.body);
+      const result = await this.userUseCases.login(userDTO.email);
+  
+      return reply.code(result.success ? 200 : 400).send(result);
+    } catch (error) {
+      return reply.code(500).send({
+        success: false,
+        message: error.message || "Internal server error"
+      });
+    }
+  }
+  
 }
