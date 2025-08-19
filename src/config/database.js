@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
 import {PrismaUserRepository}  from '../infrastructure/databases/postgres/userRepository.js';
-// import { MongoUserRepository } from '../infrastructure/databases/mongo/userRepository.js';
+import { MongoUserRepository } from '../infrastructure/databases/mongo/userRepository.js';
 
 dotenv.config();
 
