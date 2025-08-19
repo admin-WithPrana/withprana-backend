@@ -73,23 +73,6 @@ export class UserUseCases {
     return { success: true };
   }
 
-  // async verifyUser(email, otpCode) {
-  //   const otp = await this.otpRepository.findOTPByEmail(email);
-
-  //   if (!otp || otp.otpcode !== otpCode) {
-  //     throw new Error("Invalid OTP");
-  //   }
-
-  //   if (!otp.isvalid) {
-  //     await this.otpRepository.updateOTP(email, false);
-  //     throw new Error("OTP has expired");
-  //   }
-
-  //   await this.userRepository.verifyEmail(email);
-  //   await this.otpRepository.updateOTP(email, false);
-
-  //   return { success: true };
-  // }
   async verifyUser(email, otpCode) {
     const otp = await this.otpRepository.findOTPByEmail(email);
 
@@ -107,7 +90,7 @@ export class UserUseCases {
     await this.otpRepository.updateOTP(email, false);
   
     const token = jwt.sign(
-      { id: user.id, email: user.email },  
+      { id: user.id, email: user.email,name:user?.name},  
       process.env.JWT_SECRET,            
       { expiresIn: "1h" }     
     );
