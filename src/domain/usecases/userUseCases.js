@@ -114,9 +114,10 @@ export class UserUseCases {
     await this.mailer.sendMail(mailOptions);
   }
 
-  async getUsers() {
-    return this.userRepository.findAll();
-  }
+  async getUsers(filters) {
+  return this.userRepository.findAll(filters);
+}
+
 
   async getUserById(id) {
     return this.userRepository.findById(id);

@@ -7,24 +7,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id         BigInt   @id @default(autoincrement())
-  created_at DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  name       String?  @map("name")
-  email      String   @unique @map("email")
-  password   String?  @map("password")
-  isVerified Boolean  @default(false)
-  active     Boolean  @default(false)
+model Otp {
+  id        Int      @id @default(autoincrement())
+  email     String
+  otpCode   String   @map("otpcode")
+  expiresAt DateTime @map("expires_at")
+  isValid   Boolean  @default(true) @map("isvalid")
 
-  @@map("users")
-}
-
-model otps {
-  id         Int      @id @default(autoincrement())
-  email      String
-  otpcode    String
-  expires_at DateTime
-  isvalid    Boolean  @default(true)
+  @@map("otps")
 }
 
 model Admin {
@@ -33,29 +23,109 @@ model Admin {
   password  String
   active    Boolean  @default(true)
   isSuper   Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("admins")
 }
 
 model Category {
-  id        Int      @id @default(autoincrement())
-  name      String
-  icon            String?
+  id              Int      @id @default(autoincrement())
+  name            String
+  active          Boolean  @default(true)
+  isDeleted       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   backgroundImage String?
-  active    Boolean  @default(true)
-  isDeleted Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  icon            String?
+  color           String?
+
+  meditations   Meditation[]
+  subcategories Subcategory[]
+
+  @@map("categories")
 }
 
-model subcategory {
-  id        Int      @id @default(autoincrement())
-  name      String
-  icon            String?
-  backgroundImage String?
+model User {
+  id               BigInt   @id @default(autoincrement())
+  createdAt        DateTime @default(now()) @map("created_at")
+  name             String?
+  email            String   @unique
+  password         String?
+  isVerified       Boolean  @default(false)
+  active           Boolean  @default(false)
+  signupMethod     String   @default("email")
+  subscriptionType String   @default("free")
+
+  @@map("users")
+}
+
+model Meditation {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  duration    Int // in seconds
+  link        String // audio/video URL
+  thumbnail   String? // thumbnail image URL
+  isPremium   Boolean  @default(false)
+  active      Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
+  playCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId Int
+
+  subcategory   Subcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  subcategoryId String?
+
+  // Many-to-many relation via join table
+  meditationTags MeditationTags[]
+
+  @@map("meditations")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
   active    Boolean  @default(true)
-  isDeleted Boolean @default(false)
+  isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Many-to-many relation via join table
+  meditationTags MeditationTags[]
+
+  @@map("tags")
+}
+
+// Explicit join table for many-to-many relationship
+model MeditationTags {
+  meditationId String
+  tagId        String
+
+  meditation Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+  tag        Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([meditationId, tagId])
+  @@map("meditation_tags")
+}
+
+model Subcategory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId Int
+
+  meditations Meditation[]
+
+  @@unique([name, categoryId])
+  @@map("subcategories")
 }
