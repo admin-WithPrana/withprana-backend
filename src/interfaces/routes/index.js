@@ -3,6 +3,7 @@ import { adminRoutes } from './adminRoutes.js';
 import { authRoutes } from './authRoutes.js';
 import { categoryRoutes } from './categoryRoutes.js';
 import { meditationRoutes } from "./meditationRoutes.js";
+import { subcategoryRoutes } from './subCategoryRoutes.js';
 
 export async function registerRoutes(app, deps) {
   app.register(async function (userScope) {
@@ -37,4 +38,10 @@ export async function registerRoutes(app, deps) {
       mongoRepository: deps.mongoRepository
     });
   }, { prefix: '/api/meditation' });
+
+  app.register(async function (category) {
+    subcategoryRoutes(category, {
+      prismaRepository: deps.prismaRepository
+    });
+  }, { prefix: '/api/subcategory' });
 }

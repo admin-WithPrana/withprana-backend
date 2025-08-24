@@ -29,18 +29,17 @@ model Admin {
 }
 
 model Category {
-  id              Int      @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   name            String
-  active          Boolean  @default(true)
-  isDeleted       Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  active          Boolean       @default(true)
+  isDeleted       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   backgroundImage String?
   icon            String?
   color           String?
-
-  meditations   Meditation[]
-  subcategories Subcategory[]
+  meditations     Meditation[]
+  subcategories   Subcategory[]
 
   @@map("categories")
 }
@@ -60,71 +59,62 @@ model User {
 }
 
 model Meditation {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  duration    Int // in seconds
-  link        String // audio/video URL
-  thumbnail   String? // thumbnail image URL
-  isPremium   Boolean  @default(false)
-  active      Boolean  @default(true)
-  isDeleted   Boolean  @default(false)
-  playCount   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  categoryId Int
-
-  subcategory   Subcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
-  subcategoryId String?
-
-  // Many-to-many relation via join table
+  id             String           @id @default(cuid())
+  title          String
+  description    String?
+  duration       Int
+  link           String
+  thumbnail      String?
+  isPremium      Boolean          @default(false)
+  active         Boolean          @default(true)
+  isDeleted      Boolean          @default(false)
+  playCount      Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  categoryId     Int
+  subcategoryId  String?
+  type           String?
   meditationTags MeditationTags[]
+  category       Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  subcategory    Subcategory?     @relation(fields: [subcategoryId], references: [id])
 
   @@map("meditations")
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  active    Boolean  @default(true)
-  isDeleted Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Many-to-many relation via join table
+  id             String           @id @default(cuid())
+  name           String           @unique
+  active         Boolean          @default(true)
+  isDeleted      Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   meditationTags MeditationTags[]
 
   @@map("tags")
 }
 
-// Explicit join table for many-to-many relationship
 model MeditationTags {
   meditationId String
   tagId        String
-
-  meditation Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
-  tag        Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  meditation   Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([meditationId, tagId])
   @@map("meditation_tags")
 }
 
 model Subcategory {
-  id          String   @id @default(cuid())
+  id          String       @id @default(uuid())
   name        String
   description String?
-  active      Boolean  @default(true)
-  isDeleted   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  categoryId Int
-
+  active      Boolean      @default(true)
+  isDeleted   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  categoryId  Int
+  color       String?
   meditations Meditation[]
+  category    Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([name, categoryId])
   @@map("subcategories")
