@@ -12,6 +12,7 @@ export class MeditationRepository {
         link: data.link,
         thumbnail: data.thumbnail,
         isPremium: data.isPremium,
+        type:data?.type,
         active: data.active !== undefined ? data.active : true,
         category: {
           connect: { id: data.categoryId }
@@ -31,11 +32,23 @@ export class MeditationRepository {
 
   async findById(id) {
     return this.prisma.meditation.findUnique({
-      where: { id: Number(id) },
+      where: { id:id },
       include: {
         category: true,
         subcategory: true,
       },
+    });
+  }
+
+  async getMeditationBySubCategoryId(id) {
+    return this.prisma.meditation.findMany({
+      where: { subcategoryId:id }
+    });
+  }
+
+  async getMeditationByCategoryId(id) {
+    return this.prisma.meditation.findMany({
+      where: { categoryId:Number(id) }
     });
   }
 
@@ -66,13 +79,13 @@ export class MeditationRepository {
     
     if (data.subcategoryId !== undefined) {
       updateData.subcategory = {
-        connect: { id: Number(data.subcategoryId) }
+        connect: { id: data.subcategoryId }
       };
       delete updateData.subcategoryId;
     }
 
     return this.prisma.meditation.update({
-      where: { id: Number(id) },
+      where: { id:id },
       data: updateData,
       include: {
         category: true,
@@ -83,7 +96,7 @@ export class MeditationRepository {
 
   async delete(id) {
     return this.prisma.meditation.update({
-      where: { id: Number(id) },
+      where: { id: id },
       data: { isDeleted: true },
     });
   }

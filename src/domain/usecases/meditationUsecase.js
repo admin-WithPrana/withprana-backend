@@ -12,7 +12,8 @@ export class MeditationUsecase {
     isPremium = false, 
     active = true, 
     categoryId, 
-    subcategoryId = null 
+    subcategoryId = null,
+    type
   }) {
     return this.meditationRepository.create({ 
       title, 
@@ -22,13 +23,26 @@ export class MeditationUsecase {
       thumbnail, 
       isPremium: Boolean(isPremium), 
       active: Boolean(active), 
-      categoryId: Number(categoryId), 
-      subcategoryId 
+      categoryId: categoryId, 
+      subcategoryId,
+      type:type
     });
   }
 
   async getMeditationById(id) {
     const meditation = await this.meditationRepository.findById(id);
+    if (!meditation) throw new Error("Meditation not found");
+    return meditation;
+  }
+
+  async getMeditationBySubCategoryId(id) {
+    const meditation = await this.meditationRepository.getMeditationBySubCategoryId(id);
+    if (!meditation) throw new Error("Meditation not found");
+    return meditation;
+  }
+
+  async getMeditationByCategoryId(id) {
+    const meditation = await this.meditationRepository.getMeditationByCategoryId(id);
     if (!meditation) throw new Error("Meditation not found");
     return meditation;
   }

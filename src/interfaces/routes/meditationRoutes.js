@@ -19,8 +19,8 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
 
   app.post('/', async (req, reply) => {
     try {
-      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active } = req.body;
-      console.error(req.body)
+      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type} = req.body;
+      console.log(req.body.subcategoryId)
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
@@ -58,7 +58,9 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
         link: audioFileUrl, 
         thumbnail: thumbnailUrl,
         isPremium: typeof isPremium === 'object' ? isPremium.value === 'true' : Boolean(isPremium),
-        active: typeof active === 'object' ? active.value === 'true' : Boolean(active)
+        active: typeof active === 'object' ? active.value === 'true' : Boolean(active),
+        subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId,
+        type:typeof type === 'object' ? type.value : type,
       };
 
       await controller.create({ ...req, body: payload }, reply);
@@ -73,58 +75,62 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
   });
 
   app.patch('/:id', async (req, reply) => {
-    try {
-      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active } = req.body;
+  try {
+    const { id } = req.params;   // <-- get id from params
 
-      let audioFileUrl = null;
-      let thumbnailUrl = null;
+    const { 
+      title, description, duration, categoryId, 
+      audioFile, thumbnail, isPremium, active, 
+      subcategoryId, type
+    } = req.body;
 
-      if (audioFile?.file) {
-        audioFileUrl = await uploadToCloudinary(
-          audioFile,
-          'meditations/audio'
-        );
-      } else if (typeof audioFile === 'string') {
-        audioFileUrl = audioFile;
-      }
+    let audioFileUrl = null;
+    let thumbnailUrl = null;
 
-      if (thumbnail?.file) {
-        thumbnailUrl = await uploadToCloudinary(
-          thumbnail,
-          'meditations/thumbnails'
-        );
-      } else if (typeof thumbnail === 'string') {
-        thumbnailUrl = thumbnail;
-      }
-
-      const updatePayload = {
-        ...(title && { title: typeof title === 'object' ? title.value : title }),
-        ...(description && { description: typeof description === 'object' ? description.value : description }),
-        ...(duration && { duration: typeof duration === 'object' ? parseInt(duration.value) : parseInt(duration) }),
-        ...(categoryId && { categoryId: typeof categoryId === 'object' ? categoryId.value : categoryId }),
-        ...(audioFileUrl && { link: audioFileUrl }),
-        ...(thumbnailUrl && { thumbnail: thumbnailUrl }),
-        ...(isPremium !== undefined && { 
-          isPremium: typeof isPremium === 'object' ? isPremium.value === 'true' : Boolean(isPremium)
-        }),
-        ...(active !== undefined && { 
-          active: typeof active === 'object' ? active.value === 'true' : Boolean(active)
-        })
-      };
-
-      req.body = updatePayload;
-      await controller.update(req, reply);
-
-    } catch (error) {
-      console.error('Meditation update error:', error);
-      reply.status(500).send({ 
-        error: 'Failed to update meditation', 
-        details: error.message 
-      });
+    if (audioFile?.file) {
+      audioFileUrl = await uploadToCloudinary(audioFile, 'meditations/audio');
+    } else if (typeof audioFile === 'string' && audioFile.trim() !== '') {
+      audioFileUrl = audioFile;
     }
-  });
+
+    if (thumbnail?.file) {
+      thumbnailUrl = await uploadToCloudinary(thumbnail, 'meditations/thumbnails');
+    } else if (typeof thumbnail === 'string' && thumbnail.trim() !== '') {
+      thumbnailUrl = thumbnail;
+    }
+
+    const updatePayload = {
+      ...(title !== undefined && { title: typeof title === 'object' ? title.value : title }),
+      ...(description !== undefined && { description: typeof description === 'object' ? description.value : description }),
+      ...(duration !== undefined && { duration: typeof duration === 'object' ? parseInt(duration.value) : parseInt(duration) }),
+      ...(categoryId !== undefined && { categoryId: typeof categoryId === 'object' ? categoryId.value : categoryId }),
+      ...(subcategoryId !== undefined && { subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId }),
+      ...(type !== undefined && { type: typeof type === 'object' ? type.value : type }),
+      ...(audioFileUrl && { link: audioFileUrl }),
+      ...(thumbnailUrl && { thumbnail: thumbnailUrl }),
+      ...(isPremium !== undefined && { 
+        isPremium: typeof isPremium === 'object' ? isPremium.value === 'true' : Boolean(isPremium)
+      }),
+      ...(active !== undefined && { 
+        active: typeof active === 'object' ? active.value === 'true' : Boolean(active)
+      })
+    };
+
+    await controller.update({ id, data: updatePayload }, reply);
+
+  } catch (error) {
+    console.error('Meditation update error:', error);
+    reply.status(500).send({ 
+      error: 'Failed to update meditation', 
+      details: error.message 
+    });
+  }
+});
+
 
   app.get('/', (req, reply) => controller.getAll(req, reply));
   app.get('/:id', (req, reply) => controller.getById(req, reply));
+  app.get('/subcategory', (req, reply) => controller.getMeditationBySubCategoryId(req, reply));
+   app.get('/category', (req, reply) => controller.getMeditationByCategoryId(req, reply));
   app.delete('/:id', (req, reply) => controller.delete(req, reply));
 };
