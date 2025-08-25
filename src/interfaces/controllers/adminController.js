@@ -3,15 +3,35 @@ export class AdminController {
       this.userUseCases = userUseCases;
     }
   
-    async getUsers(request, reply) {
-      try {
-        const users = await this.userUseCases.getUsers();
-        return reply.send({ success: true, users });
-      } catch (error) {
-        console.error(error);
-        return reply.status(500).send({ success: false, message: 'Error fetching users' });
-      }
-    }
+   async getUsers(request, reply) {
+  try {
+    const {
+      signupMethod,
+      subscriptionType,
+      page = 1,
+      limit = 10,
+      sort = "createdAt",
+      order
+    } = request.query;
+
+    const users = await this.userUseCases.getUsers({
+      signupMethod,
+      subscriptionType,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      sort,
+      order,
+    });
+
+    return reply.send({ success: true, users });
+  } catch (error) {
+    console.error(error);
+    return reply
+      .status(500)
+      .send({ success: false, message: "Error fetching users" });
+  }
+}
+
   
     async getUserById(request, reply) {
       try {

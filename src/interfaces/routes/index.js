@@ -1,28 +1,47 @@
-// interfaces/routes/index.js
 import { setupRoutes } from './userRoutes.js';
 import { adminRoutes } from './adminRoutes.js';
 import { authRoutes } from './authRoutes.js';
 import { categoryRoutes } from './categoryRoutes.js';
-import {meditatioRoutes} from "./meditationRoutes.js"
+import { meditationRoutes } from "./meditationRoutes.js";
+import { subcategoryRoutes } from './subCategoryRoutes.js';
 
 export async function registerRoutes(app, deps) {
   app.register(async function (userScope) {
-    setupRoutes(userScope, deps);
+    setupRoutes(userScope, {
+      prismaRepository: deps.prismaRepository,
+      mailer: deps.mailer
+    });
   }, { prefix: '/api/user' });
 
   app.register(async function (adminScope) {
-    adminRoutes(adminScope, deps);
+    adminRoutes(adminScope, {
+      prismaRepository: deps.prismaRepository,
+    });
   }, { prefix: '/api/admin' });
 
   app.register(async function (authScope) {
-    authRoutes(authScope, deps);
+    authRoutes(authScope, {
+      prismaRepository: deps.prismaRepository,
+      mailer: deps.mailerd
+    });
   }, { prefix: '/api/auth' });
 
   app.register(async function (category) {
-    categoryRoutes(category, deps);
+    categoryRoutes(category, {
+      prismaRepository: deps.prismaRepository
+    });
   }, { prefix: '/api/category' });
 
   app.register(async function (meditation) {
-    meditatioRoutes(meditation, deps);
+    meditationRoutes(meditation, {
+      prismaRepository: deps.prismaRepository,
+      mongoRepository: deps.mongoRepository
+    });
   }, { prefix: '/api/meditation' });
+
+  app.register(async function (category) {
+    subcategoryRoutes(category, {
+      prismaRepository: deps.prismaRepository
+    });
+  }, { prefix: '/api/subcategory' });
 }

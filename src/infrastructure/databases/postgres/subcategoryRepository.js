@@ -1,32 +1,35 @@
-export class CategoryRepository {
+export class SubcategoryRepository {
     constructor(prisma) {
         this.prisma = prisma;
     }
 
     async create(data) {
-        return this.prisma.category.create({ 
+        return this.prisma.subcategory.create({ 
             data: {
                 name: data.name,
-                backgroundImage: data.backgroundImage || null,
-                icon: data.icon || null,
+                color: data?.color || null,
+                categoryId: data.categoryId,
                 active: data.active !== undefined ? data.active : true,
                 isDeleted: data.isDeleted !== undefined ? data.isDeleted : false,
-                color:data?.color
-            }
-        });
-    }
-
-    async findById(id) {
-        return this.prisma.category.findUnique({ 
-            where: { id },
+            },
             include: {
+                category: true,
                 meditations: {
                     where: {
                         active: true,
                         isDeleted: false
                     }
-                },
-                subcategories: {
+                }
+            }
+        });
+    }
+
+    async findById(id) {
+        return this.prisma.subcategory.findUnique({ 
+            where: { id },
+            include: {
+                category: true,
+                meditations: {
                     where: {
                         active: true,
                         isDeleted: false
@@ -37,21 +40,16 @@ export class CategoryRepository {
     }
 
     async findAll() {
-        return this.prisma.category.findMany({
+        return this.prisma.subcategory.findMany({
             where: {
                 active: true,
                 isDeleted: false,
             },
             include: {
+                category: true,
                 _count: {
                     select: {
                         meditations: {
-                            where: {
-                                active: true,
-                                isDeleted: false
-                            }
-                        },
-                        subcategories: {
                             where: {
                                 active: true,
                                 isDeleted: false
@@ -67,20 +65,15 @@ export class CategoryRepository {
     }
 
     async update(id, data) {
-        return this.prisma.category.update({
+        return this.prisma.subcategory.update({
             where: { id },
             data: {
                 ...data,
                 updatedAt: new Date()
             },
             include: {
+                category: true,
                 meditations: {
-                    where: {
-                        active: true,
-                        isDeleted: false
-                    }
-                },
-                subcategories: {
                     where: {
                         active: true,
                         isDeleted: false
@@ -91,7 +84,7 @@ export class CategoryRepository {
     }
 
     async delete(id) {
-        return this.prisma.category.update({ 
+        return this.prisma.subcategory.update({ 
             where: { id },
             data: { 
                 isDeleted: true,
@@ -102,7 +95,7 @@ export class CategoryRepository {
     }
 
     async findByName(name) {
-        return this.prisma.category.findFirst({
+        return this.prisma.subcategory.findFirst({
             where: {
                 name: {
                     equals: name,
@@ -110,15 +103,21 @@ export class CategoryRepository {
                 },
                 active: true,
                 isDeleted: false
+            },
+            include: {
+                category: true
             }
         });
     }
 
     async findByActiveStatus(active) {
-        return this.prisma.category.findMany({
+        return this.prisma.subcategory.findMany({
             where: {
                 active: active,
                 isDeleted: false
+            },
+            include: {
+                category: true
             },
             orderBy: {
                 name: 'asc'
@@ -127,7 +126,7 @@ export class CategoryRepository {
     }
 
     async restore(id) {
-        return this.prisma.category.update({
+        return this.prisma.subcategory.update({
             where: { id },
             data: {
                 isDeleted: false,
@@ -136,4 +135,22 @@ export class CategoryRepository {
             }
         });
     }
+
+    async findByNameAndCategory(name, categoryId) {
+    return this.prisma.subcategory.findFirst({
+        where: {
+            name: {
+                equals: name,
+                mode: 'insensitive'
+            },
+            categoryId,
+            active: true,
+            isDeleted: false
+        },
+        include: {
+            category: true
+        }
+    });
+}
+
 }

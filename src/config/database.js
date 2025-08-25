@@ -1,14 +1,23 @@
-// src/config/database.js
 import { PrismaClient } from '@prisma/client';
 import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
-import {PrismaUserRepository}  from '../infrastructure/databases/postgres/userRepository.js';
+import { PrismaUserRepository } from '../infrastructure/databases/postgres/userRepository.js';
 import { MongoUserRepository } from '../infrastructure/databases/mongo/userRepository.js';
 
 dotenv.config();
 
-let prisma;
-let mongoClient;
+export let prisma;
+export let mongoClient;
+
+export const createPrismaUserRepository = () => {
+  if (!prisma) throw new Error('Prisma client not initialized');
+  return new PrismaUserRepository(prisma);
+};
+
+export const createMongoUserRepository = () => {
+  if (!mongoClient) throw new Error('MongoDB client not initialized');
+  return new MongoUserRepository(mongoClient);
+};
 
 export const initializeDatabaseConnections = async () => {
   try {
@@ -23,8 +32,7 @@ export const initializeDatabaseConnections = async () => {
 
     return {
       prisma,
-      prismaRepository: new PrismaUserRepository(prisma),
-      mongoRepository: new MongoUserRepository(mongoClient),
+      mongoClient
     };
   } catch (err) {
     console.error('❌ Database connection error:', err);
