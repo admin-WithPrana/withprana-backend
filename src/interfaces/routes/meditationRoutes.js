@@ -12,7 +12,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
   app.register(fastifyMultipart, {
     limits: {
       fileSize: 50 * 1024 * 1024,
-      files: 2
+      files: 5
     },
     attachFieldsToBody: true
   });

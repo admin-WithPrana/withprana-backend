@@ -4,6 +4,8 @@ import { authRoutes } from './authRoutes.js';
 import { categoryRoutes } from './categoryRoutes.js';
 import { meditationRoutes } from "./meditationRoutes.js";
 import { subcategoryRoutes } from './subCategoryRoutes.js';
+import { tagsRoutes } from './tagRoutes.js';
+
 
 export async function registerRoutes(app, deps) {
   app.register(async function (userScope) {
@@ -44,4 +46,10 @@ export async function registerRoutes(app, deps) {
       prismaRepository: deps.prismaRepository
     });
   }, { prefix: '/api/subcategory' });
+
+    app.register(async function (tags) {
+    tagsRoutes(tags, {
+      prismaRepository: deps.prismaRepository
+    });
+  }, { prefix: '/api/tags' });
 }

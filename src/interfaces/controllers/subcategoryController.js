@@ -10,7 +10,7 @@ export class SubcategoryController {
             const payload = {
                 name: typeof name === "object" ? name.value : name,
                 color: typeof color === "object" ? color.value : color,
-                categoryId: parseInt(categoryId, 10),
+                categoryId: 10,
             };
 
             const subcategory = await this.subcategoryUsecase.createSubcategory(payload);
