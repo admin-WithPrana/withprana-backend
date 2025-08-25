@@ -41,9 +41,11 @@ export class PrismaUserRepository {
     where,
     skip,
     take,
+   ...(sort && {
     orderBy: {
-      [sort]: order.toLowerCase() === "asc" ? "asc" : "desc",
+      [sort]: order?.toLowerCase() === "asc" ? "asc" : "desc",
     },
+  })
   });
 
   const total = await this.prisma.user.count({ where });
