@@ -14,7 +14,7 @@ export class MeditationController {
 
   async create(req, reply) {
     try {
-      const { title, description, duration, link, thumbnail, isPremium, categoryId, subcategoryId,type} = req.body;
+      const { title, description, duration, link, thumbnail, isPremium, categoryId, subcategoryId,type,tags} = req.body;
       const file = req.file;
 
       const meditationData = {
@@ -27,7 +27,8 @@ export class MeditationController {
         categoryId: Number(categoryId),
         subcategoryId: subcategoryId || null,
         subcategoryId,
-        type
+        type,
+        tags
       };
 
       const meditation = await this.meditationUsecase.createMeditation(meditationData);

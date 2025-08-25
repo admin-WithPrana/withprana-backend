@@ -19,8 +19,8 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
 
   app.post('/', async (req, reply) => {
     try {
-      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type} = req.body;
-      console.log(req.body.subcategoryId)
+      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type,tags} = req.body;
+      console.log(tags)
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
@@ -50,6 +50,45 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
         thumbnailUrl = thumbnail;
       }
 
+          let parsedTags = [];
+    if (tags) {
+      console.log('🔍 Processing tags...');
+      
+      if (tags.value) {
+        console.log('🔍 Tags has value property, extracting:', tags.value);
+        try {
+          parsedTags = JSON.parse(tags.value);
+          console.log('✅ Successfully parsed JSON from tags.value:', parsedTags);
+        } catch (e) {
+          console.log('❌ JSON parse failed from tags.value, treating as comma-separated');
+          parsedTags = tags.value.split(',').map(tag => tag.trim()).filter(tag => tag);
+          console.log('✅ Comma-separated tags from value:', parsedTags);
+        }
+      }
+      else if (typeof tags === 'string') {
+        console.log('🔍 Tags is a string, attempting to parse...');
+        try {
+          parsedTags = JSON.parse(tags);
+          console.log('✅ Successfully parsed JSON tags:', parsedTags);
+        } catch (e) {
+          console.log('❌ JSON parse failed, treating as comma-separated string');
+          parsedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+          console.log('✅ Comma-separated tags:', parsedTags);
+        }
+      } else if (Array.isArray(tags)) {
+        console.log('🔍 Tags is already an array');
+        parsedTags = tags.map(tag => 
+          typeof tag === 'object' ? tag.value || tag.id : tag
+        ).filter(tag => tag);
+        console.log('✅ Processed array tags:', parsedTags);
+      } else {
+        console.log('❌ Tags format not recognized:', tags);
+      }
+    } else {
+      console.log('⚠️ No tags provided or tags is null/undefined');
+    }
+
+
       const payload = {
         title: typeof title === 'object' ? title.value : title,
         description: typeof description === 'object' ? description.value : description,
@@ -61,6 +100,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
         active: typeof active === 'object' ? active.value === 'true' : Boolean(active),
         subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId,
         type:typeof type === 'object' ? type.value : type,
+        tags:parsedTags
       };
 
       await controller.create({ ...req, body: payload }, reply);

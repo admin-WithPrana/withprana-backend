@@ -13,8 +13,10 @@ export class MeditationUsecase {
     active = true, 
     categoryId, 
     subcategoryId = null,
-    type
+    type,
+    tags
   }) {
+    console.log(tags)
     return this.meditationRepository.create({ 
       title, 
       description, 
@@ -25,7 +27,8 @@ export class MeditationUsecase {
       active: Boolean(active), 
       categoryId: categoryId, 
       subcategoryId,
-      type:type
+      type:type,
+      tags:tags
     });
   }
 
