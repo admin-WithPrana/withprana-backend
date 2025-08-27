@@ -5,6 +5,7 @@ import { categoryRoutes } from './categoryRoutes.js';
 import { meditationRoutes } from "./meditationRoutes.js";
 import { subcategoryRoutes } from './subCategoryRoutes.js';
 import { tagsRoutes } from './tagRoutes.js';
+import { likedRoutes } from './likedRoutes.js';
 
 
 export async function registerRoutes(app, deps) {
@@ -52,4 +53,11 @@ export async function registerRoutes(app, deps) {
       prismaRepository: deps.prismaRepository
     });
   }, { prefix: '/api/tags' });
+
+   app.register(async function (tags) {
+    likedRoutes(tags, {
+      prismaRepository: deps.prismaRepository
+    });
+  }, { prefix: '/api/liked' });
 }
+
