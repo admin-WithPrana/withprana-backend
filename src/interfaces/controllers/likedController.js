@@ -57,7 +57,7 @@ export class LikedController {
   async getLikedMeditations(request, reply) {
     try {
       const { userId } = request.params;
-      const {categoryId}=request.query
+      const {categoryId , type , limit ,skip}=request.query
       if (!userId) {
         return reply.status(400).send({
           success: false,
@@ -65,7 +65,7 @@ export class LikedController {
         });
       }
 
-      const likedMeditations = await this.likedUsecase.getLikedMeditations(userId,categoryId);
+      const likedMeditations = await this.likedUsecase.getLikedMeditations(userId,categoryId , type , limit ,skip);
 
       return reply.send({ success: true, likedMeditations });
     } catch (error) {

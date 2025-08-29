@@ -45,13 +45,13 @@ export class LikedUsecase {
   }
 
   // Get all liked meditations of a user
-  async getLikedMeditations(userId,categoryId) {
+  async getLikedMeditations(userId,categoryId , type , limit ,skip) {
     try {
       if (!userId || isNaN(userId)) {
         throw new Error('Valid user ID is required');
       }
 
-      const likedMeditations = await this.likedRepository.getLikedMeditations(userId,categoryId);
+      const likedMeditations = await this.likedRepository.getLikedMeditations(userId,categoryId , type , limit ,skip);
 
       if (!likedMeditations || likedMeditations.length === 0) {
         throw new Error('No liked meditations found for this user');
