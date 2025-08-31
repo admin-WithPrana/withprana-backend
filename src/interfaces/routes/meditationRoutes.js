@@ -20,7 +20,8 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
   app.post('/', async (req, reply) => {
     try {
       const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type,tags} = req.body;
-      console.log(tags)
+      console.log(req.body)
+
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
@@ -88,6 +89,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
       console.log('⚠️ No tags provided or tags is null/undefined');
     }
 
+    console.log(parsedTags)
 
       const payload = {
         title: typeof title === 'object' ? title.value : title,
@@ -100,7 +102,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
         active: typeof active === 'object' ? active.value === 'true' : Boolean(active),
         subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId,
         type:typeof type === 'object' ? type.value : type,
-        tags:parsedTags
+        tags:parsedTags.tags
       };
 
       await controller.create({ ...req, body: payload }, reply);

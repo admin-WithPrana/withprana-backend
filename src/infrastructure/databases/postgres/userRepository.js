@@ -36,13 +36,35 @@ export class PrismaUserRepository {
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const users = await this.prisma.user.findMany({
-      where,
-      skip,
-      take,
-      orderBy: {
-        [sort]: order.toLowerCase() === "asc" ? "asc" : "desc",
-      },
+  const users = await this.prisma.user.findMany({
+    where,
+    skip,
+    take,
+   ...(sort && {
+    orderBy: {
+      [sort]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+    },
+  })
+  });
+
+  const total = await this.prisma.user.count({ where });
+
+  return {
+    data: users.map((user) => ({ ...user, id: Number(user.id) })),
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+  
+
+  async findById(id) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: Number(id) }
     });
 
     const total = await this.prisma.user.count({ where });

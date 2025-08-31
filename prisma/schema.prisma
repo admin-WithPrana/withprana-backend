@@ -54,6 +54,7 @@ model User {
   active           Boolean  @default(false)
   signupMethod     String   @default("email")
   subscriptionType String   @default("free")
+  likedMeditations Liked[]
 
   @@map("users")
 }
@@ -77,6 +78,7 @@ model Meditation {
   meditationTags MeditationTags[]
   category       Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory    Subcategory?     @relation(fields: [subcategoryId], references: [id])
+  likedUsers     Liked[]
 
   @@map("meditations")
 }
@@ -118,4 +120,18 @@ model Subcategory {
 
   @@unique([name, categoryId])
   @@map("subcategories")
+}
+
+
+model Liked {
+  id           String      @id @default(uuid())
+  userId       BigInt
+  meditationId String
+  createdAt    DateTime    @default(now())
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meditation   Meditation  @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, meditationId])
+  @@map("liked_meditations")
 }
