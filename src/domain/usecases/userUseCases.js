@@ -2,11 +2,12 @@ import { User, OTP } from "../entities/user.js";
 import jwt from "jsonwebtoken";
 
 export class UserUseCases {
-  constructor(userRepository, otpRepository, mailer) {
-    this.userRepository = userRepository;
+  constructor(userRepo, otpRepository, mailer) {
+    this.userRepository = userRepo;
     this.otpRepository = otpRepository;
     this.mailer = mailer;
   }
+
 
   async registerUser(userData) {
     const user = new User({
@@ -41,7 +42,7 @@ export class UserUseCases {
       }
     }
 
-    const createdUser = await this.userRepository.create(user);
+    const createdUser = await this.userRepository.createUser(user);
 
     await this.otpRepository.createOTP(otp);
     await this.sendOTPEmail(user.email, otpCode);
@@ -76,11 +77,11 @@ export class UserUseCases {
   async verifyUser(email, otpCode) {
     const otp = await this.otpRepository.findOTPByEmail(email);
 
-    if (!otp || otp.otpcode !== otpCode) {
+    if (!otp || otp.otpCode !== otpCode) {
       throw new Error("Invalid OTP");
     }
 
-    if (!otp.isvalid) {
+    if (!otp.isValid) {
       await this.otpRepository.updateOTP(email, false);
       throw new Error("OTP has expired");
     }

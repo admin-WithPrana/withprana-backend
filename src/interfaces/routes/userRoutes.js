@@ -1,11 +1,18 @@
 import { UserController } from '../controllers/userController.js';
 import { PostgresOTPRepository } from '../../infrastructure/databases/postgres/otpRepository.js';
+import {PrismaUserRepository}  from "../../infrastructure/databases/postgres/userRepository.js"
 
-export const setupRoutes = (app, { prismaRepository, mongoRepository, mailer }) => {
+// userRoutes.js
+export const setupRoutes = (app, { prismaRepository, mailer }) => {
+  if (!prismaRepository || !prismaRepository.prisma) {
+    throw new Error('Prisma client is not properly initialized');
+  }
+
   const otpRepo = new PostgresOTPRepository(prismaRepository.prisma);
+  const userRepo = new PrismaUserRepository(prismaRepository.prisma);
 
   const userController = new UserController(
-    prismaRepository,
+    userRepo,
     otpRepo,
     mailer
   );

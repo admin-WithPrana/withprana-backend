@@ -32,8 +32,7 @@ const startServer = async () => {
   await registerRoutes(app, {
     prismaRepository,
     mongoRepository,
-    mailer,
-    otpRepository
+    mailer
   });
 
   try {
