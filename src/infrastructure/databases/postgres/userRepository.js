@@ -29,63 +29,45 @@ export class PrismaUserRepository {
   }
 
   async findAll({ signupMethod, subscriptionType, page, limit, sort, order }) {
-    console.log(signupMethod,subscriptionType)
-  const where = {};
-  if (signupMethod) where.signupMethod = signupMethod;
-  if (subscriptionType) where.subscriptionType = subscriptionType;
+    const where = {};
+    if (signupMethod) where.signupMethod = signupMethod;
+    if (subscriptionType) where.subscriptionType = subscriptionType;
 
-  const skip = (page - 1) * limit;
-  const take = limit;
+    const skip = (page - 1) * limit;
+    const take = limit;
 
-  const users = await this.prisma.user.findMany({
-    where,
-    skip,
-    take,
-    orderBy: {
-      [sort]: order.toLowerCase() === "asc" ? "asc" : "desc",
-    },
-  });
-
-  const total = await this.prisma.user.count({ where });
-
-  return {
-    data: users.map((user) => ({ ...user, id: Number(user.id) })),
-    pagination: {
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
-}
-
-  
-
-  async findById(id) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: Number(id) }
+    const users = await this.prisma.user.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        [sort]: order.toLowerCase() === "asc" ? "asc" : "desc",
+      },
     });
-  
-    if (!user) return null;
-  
+
+    const total = await this.prisma.user.count({ where });
+
     return {
-      ...user,
-      id: user.id.toString(),
+      data: users,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
-  
+
+  async findById(id) {
+    return this.prisma.user.findUnique({
+      where: { id: Number(id) }
+    });
+  }
 
   async update(id, data) {
-    const user = await this.prisma.user.update({
+    return this.prisma.user.update({
       where: { id: Number(id) },
       data
     });
-
-    if (!user) return null;
-  
-    return {
-      ...user,
-      id: user.id.toString(),
-    };
   }
 }
