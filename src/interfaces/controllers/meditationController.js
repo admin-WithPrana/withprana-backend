@@ -72,7 +72,8 @@ export class MeditationController {
 
   async getAll(req, reply) {
     try {
-      const meditations = await this.meditationUsecase.getAllMeditations();
+      const {limit,page,sort,order}=req.query
+      const meditations = await this.meditationUsecase.getAllMeditations(limit,page,sort,order);
       reply.send(meditations);
     } catch (err) {
       reply.status(500).send({ message: err.message });

@@ -50,8 +50,8 @@ export class MeditationUsecase {
     return meditation;
   }
 
-  async getAllMeditations() {
-    return this.meditationRepository.findAll();
+  async getAllMeditations(limit,page,sort,order) {
+    return this.meditationRepository.findAll(limit,page,sort,order);
   }
 
   async updateMeditation(id, data) {

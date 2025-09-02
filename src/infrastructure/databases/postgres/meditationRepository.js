@@ -130,36 +130,45 @@ export class MeditationRepository {
 //     },
 //   });
 // }
-async findAll() {
-  const result = await this.prisma.meditation.findMany({
-    where: {
-      isDeleted: false,
-    },
-    include: {
-      category: true,
-      subcategory: true,
-      meditationTags: {
-        include: {
-          tag: true 
+async findAll( limit = 10, page=1,sort,order) {
+  const skip = (Number(page || 1) - 1) * Number(limit || 10);
+
+  const [data, total] = await Promise.all([
+    this.prisma.meditation.findMany({
+      where: {
+        isDeleted: false,
+      },
+      orderBy: {
+            [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+          },
+      include: {
+        category: true,
+        subcategory: true,
+        meditationTags: {
+          include: {
+            tag: true
+          }
         }
-      }
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+      },
+      take: Number(limit || 10),
+      skip: Number(skip || 0),
+    }),
+    this.prisma.meditation.count({
+      where: {
+        isDeleted: false,
+      },
+    }),
+  ]);
 
-  // Debug: Check what's actually being returned
-  console.log('🔍 Meditation Tags Debug:');
-  result.forEach((meditation, index) => {
-    console.log(`Meditation ${index + 1}: ${meditation.title}`);
-    console.log(`Tags count: ${meditation.meditationTags.length}`);
-    meditation.meditationTags.forEach(tagRel => {
-      console.log(`- Tag: ${tagRel.tag.name} (ID: ${tagRel.tag.id})`);
-    });
-  });
-
-  return result;
+  return {
+    data,
+    pagination: {
+      total,
+      page: Number(page || 1),
+      limit: Number(limit || 10),
+      totalPages: Math.ceil(total / (limit || 10)),
+    },
+  };
 }
 
   async update(id, data) {
