@@ -21,4 +21,5 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post('/verify', (request, reply) => userController.verify(request, reply));
   app.post('/resend-otp', (request, reply) => userController.resendOTP(request, reply));
   app.post('/login', (request, reply) => userController.login(request, reply));
+  app.get('/:id', (request, reply) => userController.getUserById(request, reply));
 };

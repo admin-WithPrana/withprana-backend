@@ -74,4 +74,13 @@ export class UserController {
     }
   }
   
+  async getUserById(request, reply) {
+    try {
+      const { id } = request.params;
+      const user = await this.userUseCases.getUserById(id);
+      return reply.code(200).send({ success: true, user });
+    } catch (error) {
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
 }
