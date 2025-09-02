@@ -39,11 +39,12 @@ export class SubcategoryRepository {
         });
     }
 
-    async findAll() {
+    async findAll(categoryId) {
         return this.prisma.subcategory.findMany({
             where: {
                 active: true,
                 isDeleted: false,
+                categoryId:parseInt(categoryId)
             },
             include: {
                 category: true,
@@ -151,6 +152,7 @@ export class SubcategoryRepository {
             category: true
         }
     });
+    
 }
 
 }

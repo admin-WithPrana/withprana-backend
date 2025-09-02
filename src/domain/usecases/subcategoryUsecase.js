@@ -58,9 +58,9 @@ export class SubcategoryUsecase {
     }
 }
 
-    async getAllSubcategories() {
+    async getAllSubcategories(categoryId) {
         try {
-            const subcategories = await this.subcategoryRepository.findAll();
+            const subcategories = await this.subcategoryRepository.findAll(categoryId);
             
             if (!subcategories || subcategories.length === 0) {
                 throw new Error('No subcategories found');

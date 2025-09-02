@@ -76,6 +76,11 @@ export class MeditationRepository {
       include: {
         category: true,
         subcategory: true,
+        meditationTags: {
+        include: {
+          tag: true
+        }
+      }
       },
     });
   }
@@ -159,7 +164,7 @@ async findAll() {
 
   async update(id, data) {
     const updateData = { ...data };
-    
+    console.log(data)
     if (data.categoryId !== undefined) {
       updateData.category = {
         connect: { id: Number(data.categoryId) }
@@ -172,6 +177,10 @@ async findAll() {
         connect: { id: data.subcategoryId }
       };
       delete updateData.subcategoryId;
+    }
+
+    if(data.isPremium){
+      updateData.isPremium=Boolean(data.isPremium)
     }
 
     return this.prisma.meditation.update({
