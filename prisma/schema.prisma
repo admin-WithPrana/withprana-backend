@@ -135,3 +135,23 @@ model Liked {
   @@unique([userId, meditationId])
   @@map("liked_meditations")
 }
+
+model ThoughtOfTheDay {
+  id              String    @id @default(cuid())
+  thumbnail       String   
+  link            String
+  title           String
+  duration        String  
+  description     String
+  scheduledAt     DateTime  
+  status          ThoughtStatus @default(PENDING)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+
+enum ThoughtStatus {
+  PENDING   
+  POSTED    
+  REPOSTED  
+}
