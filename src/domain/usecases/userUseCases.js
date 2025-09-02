@@ -161,4 +161,8 @@ export class UserUseCases {
       console.error(error);
     }
   }
+
+  async getUserById(id) {
+    return this.userRepository.findById(id);
+  }
 }
