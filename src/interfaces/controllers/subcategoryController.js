@@ -10,7 +10,7 @@ export class SubcategoryController {
             const payload = {
                 name: typeof name === "object" ? name.value : name,
                 color: typeof color === "object" ? color.value : color,
-                categoryId: 10,
+                categoryId:  categoryId,
             };
 
             const subcategory = await this.subcategoryUsecase.createSubcategory(payload);
@@ -32,7 +32,8 @@ export class SubcategoryController {
 
     async getAll(req, reply) {
         try {
-            const subcategories = await this.subcategoryUsecase.getAllSubcategories();
+            const {categoryId}=req.query
+            const subcategories = await this.subcategoryUsecase.getAllSubcategories(categoryId);
             reply.send(subcategories);
         } catch (err) {
             reply.status(500).send({ message: err.message });

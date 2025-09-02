@@ -6,6 +6,7 @@ import { registerRoutes } from './interfaces/routes/index.js';
 import { initializeDatabaseConnections } from './config/database.js';
 import { initializeMailer } from './config/mail.js';
 import { PostgresOTPRepository } from './infrastructure/databases/postgres/otpRepository.js';
+import { postQueue } from './config/bullmq.js';
 
 const startServer = async () => {
   const app = fastify({ logger: true });
@@ -32,7 +33,8 @@ const startServer = async () => {
   await registerRoutes(app, {
     prismaRepository,
     mongoRepository,
-    mailer
+    mailer,
+    postQueue
   });
 
   try {

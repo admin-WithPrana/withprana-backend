@@ -6,6 +6,7 @@ import { meditationRoutes } from "./meditationRoutes.js";
 import { subcategoryRoutes } from './subCategoryRoutes.js';
 import { tagsRoutes } from './tagRoutes.js';
 import { likedRoutes } from './likedRoutes.js';
+import { thoughtRoutes } from './thoughOfTheDayRoute.js';
 
 export async function registerRoutes(app, deps) {
   app.register(async function (userScope) {
@@ -58,4 +59,11 @@ export async function registerRoutes(app, deps) {
       prismaRepository: deps.prismaRepository
     });
   }, { prefix: '/api/liked' });
+
+   app.register(async function (thoughtScope) { // Changed parameter name
+    thoughtRoutes(thoughtScope, {
+      prismaRepository: deps.prismaRepository,
+      postQueue:deps.postQueue
+    });
+  }, { prefix: '/api/thought' });
 }
