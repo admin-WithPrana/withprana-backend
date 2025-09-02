@@ -111,9 +111,9 @@ export class ThoughtOfTheDayUsecase {
   }
 
   // Get thoughts by filter
-  async getThoughts({ status = null, limit = null, skip = null }) {
+  async getThoughts({ status = null, limit = null, skip = null,sort,order }) {
     try {
-      return await this.thoughtRepository.findAll({ status, limit, skip });
+      return await this.thoughtRepository.findAll({ status, limit, skip,sort,order });
     } catch (error) {
       throw new Error(error.message);
     }

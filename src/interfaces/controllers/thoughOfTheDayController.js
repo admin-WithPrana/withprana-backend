@@ -57,9 +57,9 @@ export class ThoughtOfTheDayController {
   // GET /thoughts
   async getThoughts(request, reply) {
     try {
-      const { status, limit, skip } = request.query;
+      const { status, limit=10, page,sort,order } = request.query;
 
-      const thoughts = await this.thoughtUsecase.getThoughts({ status, limit, skip });
+      const thoughts = await this.thoughtUsecase.getThoughts({ status, limit, skip: limit && page ? (Number(page) - 1) * Number(limit) : null,sort,order });
 
       return reply.send({
         success: true,
