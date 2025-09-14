@@ -55,6 +55,7 @@ model User {
   signupMethod     String   @default("email")
   subscriptionType String   @default("free")
   likedMeditations Liked[]
+  playlists Playlist[]
 
   @@map("users")
 }
@@ -79,6 +80,7 @@ model Meditation {
   category       Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory    Subcategory?     @relation(fields: [subcategoryId], references: [id])
   likedUsers     Liked[]
+  playlistItems PlaylistMeditation[]
 
   @@map("meditations")
 }
@@ -154,4 +156,35 @@ enum ThoughtStatus {
   PENDING   
   POSTED    
   REPOSTED  
+}
+
+model Playlist {  
+  id          String              @id @default(uuid())
+  name        String
+  icon        String?
+  description String?
+  isPublic    Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  userId      BigInt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       PlaylistMeditation[]
+
+  @@map("playlists")
+}
+
+model PlaylistMeditation {
+  id           String      @id @default(uuid())
+  playlistId   String
+  meditationId String
+  addedAt      DateTime    @default(now())
+  order        Int?
+  createdAt   DateTime     @default(now())
+
+  playlist     Playlist    @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  meditation   Meditation  @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, meditationId]) // prevent duplicate meditations in the same playlist
+  @@map("playlist_meditations")
 }
