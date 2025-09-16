@@ -54,18 +54,23 @@ export class PlaylistRepository {
   }
 
   async findAllPaginated(filter = {}, skip, take) {
-    const [playlists, totalCount] = await this.prisma.$transaction([
-      this.prisma.playlist.findMany({
-        where: filter,
-        skip,
-        take,
-        // include: { items: { include: { meditation: true } } },
-      }),
-      this.prisma.playlist.count({ where: filter }),
-    ]);
+  const [playlists, totalCount] = await this.prisma.$transaction([
+    this.prisma.playlist.findMany({
+      where: filter,
+      skip,
+      take,
+      include: {
+        _count: {
+          select: { items: true },
+        },
+      },
+    }),
+    this.prisma.playlist.count({ where: filter }),
+  ]);
 
-    return { playlists, totalCount };
-  }
+  return { playlists, totalCount };
+}
+
 
   async delete(id) {
     return await this.prisma.playlist.delete({ where: { id } });
