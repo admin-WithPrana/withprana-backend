@@ -26,24 +26,31 @@ export class PlaylistRepository {
   }
 
   async getPlaylistById(id, options = {}) {
-  const { page = 1, limit = 10 } = options;
-  const skip = (page - 1) * limit;
+    const { page = 1, limit = 10 } = options;
+    const skip = (page - 1) * limit;
   
-  return await this.prisma.playlist.findUnique({
-    where: { id },
-    include: {
-      items: {
-        include: { meditation: true },
-        skip: skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' }
+    return await this.prisma.playlist.findUnique({
+      where: { id },
+      include: {
+        items: {
+          include: {
+            meditation: {
+              include: {
+                category: true,
+              },
+            },
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: {
+          select: { items: true },
+        },
       },
-      _count: {
-        select: { items: true }
-      }
-    }
-  });
-}
+    });
+  }
+  
 
   async findAll(filter = {}) {
     return await this.prisma.playlist.findMany({
