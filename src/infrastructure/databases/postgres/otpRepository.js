@@ -34,7 +34,7 @@ export class PostgresOTPRepository extends OTPRepository {
           email: email.toLowerCase(),
           isValid: true
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { created_at: 'desc' }
       });
 
       if (!result) {
