@@ -34,7 +34,7 @@ export class PostgresOTPRepository extends OTPRepository {
           email: email.toLowerCase(),
           isValid: true
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' } // This is correct - use the Prisma model field name
       });
 
       if (!result) {
