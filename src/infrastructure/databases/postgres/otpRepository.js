@@ -12,7 +12,6 @@ export class PostgresOTPRepository extends OTPRepository {
   }
 
   async createOTP(otp) {
-    console.log('createOTP called with prisma:', this.prisma);
     try {
       return await this.prisma.otp.create({
         data: {
@@ -28,36 +27,16 @@ export class PostgresOTPRepository extends OTPRepository {
     }
   }
 
-  // async findOTPByEmail(email) {
-  //   try {
-  //     const result = await this.prisma.otp.findFirst({ 
-  //       where: { email: email.toLowerCase() },
-  //       // orderBy: { createdAt: 'desc' }, 
-  //     });
-
-  //     if (!result) {
-  //       return null;
-  //     }
-
-  //     return {
-  //       ...result,
-  //       id: result.id.toString()
-  //     };
-  //   } catch (error) {
-  //     console.error('Error in findOTPByEmail:', error);
-  //     throw error;
-  //   }
-  // }
   async findOTPByEmail(email) {
     try {
       const result = await this.prisma.otp.findFirst({ 
         where: { 
           email: email.toLowerCase(),
-          isValid: true  // ✅ only fetch valid OTPs
+          isValid: true
         },
-        // orderBy: { createdAt: 'desc' }, // get latest one if multiple
+        orderBy: { createdAt: 'desc' }
       });
-  
+
       if (!result) {
         return null;
       }
