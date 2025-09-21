@@ -13,6 +13,7 @@ model Otp {
   otpCode   String   @map("otpcode")
   expiresAt DateTime @map("expires_at")
   isValid   Boolean  @default(true) @map("isvalid")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("otps")
 }
@@ -45,17 +46,18 @@ model Category {
 }
 
 model User {
-  id               BigInt   @id @default(autoincrement())
-  createdAt        DateTime @default(now()) @map("created_at")
+  id               BigInt    @id @default(autoincrement())
+  createdAt        DateTime  @default(now()) @map("created_at")
   name             String?
-  email            String   @unique
+  email            String    @unique
   password         String?
-  isVerified       Boolean  @default(false)
-  active           Boolean  @default(false)
-  signupMethod     String   @default("email")
-  subscriptionType String   @default("free")
+  image            String?
+  isVerified       Boolean   @default(false)
+  active           Boolean   @default(false)
+  signupMethod     String    @default("email") @db.VarChar(20)
+  subscriptionType String    @default("free")
   likedMeditations Liked[]
-  playlists Playlist[]
+  playlists        Playlist[]
 
   @@map("users")
 }
