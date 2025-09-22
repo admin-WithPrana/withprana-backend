@@ -21,6 +21,9 @@ export class PrismaUserRepository {
     try {
        await this.prisma.user.create({ 
         data: {
+          image: user.image,
+          signupMethod: user.signupMethod,
+          subscriptionType: user.subscriptionType,
           email: user.email.toLowerCase(),
           name: user.name,
           password: user.password,
@@ -98,6 +101,18 @@ export class PrismaUserRepository {
   }
 
   async update(id, data) {
+    try {
+      return await this.prisma.user.update({
+        where: { id: Number(id) },
+        data
+      });
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
+  }
+
+  async updateUser(id, data) {
     try {
       return await this.prisma.user.update({
         where: { id: Number(id) },
