@@ -46,16 +46,16 @@ model Category {
 }
 
 model User {
-  id               BigInt    @id @default(autoincrement())
-  createdAt        DateTime  @default(now()) @map("created_at")
+  id               BigInt     @id @default(autoincrement())
+  createdAt        DateTime   @default(now()) @map("created_at")
   name             String?
-  email            String    @unique
+  email            String     @unique
   password         String?
   image            String?
-  isVerified       Boolean   @default(false)
-  active           Boolean   @default(false)
-  signupMethod     String    @default("email") @db.VarChar(20)
-  subscriptionType String    @default("free")
+  isVerified       Boolean    @default(false)
+  active           Boolean    @default(false)
+  signupMethod     String     @default("email") @db.VarChar(20)
+  subscriptionType String     @default("free")
   likedMeditations Liked[]
   playlists        Playlist[]
 
@@ -63,26 +63,26 @@ model User {
 }
 
 model Meditation {
-  id             String           @id @default(cuid())
+  id             String               @id @default(cuid())
   title          String
   description    String?
   duration       Int
   link           String
   thumbnail      String?
-  isPremium      Boolean          @default(false)
-  active         Boolean          @default(true)
-  isDeleted      Boolean          @default(false)
-  playCount      Int              @default(0)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  isPremium      Boolean              @default(false)
+  active         Boolean              @default(true)
+  isDeleted      Boolean              @default(false)
+  playCount      Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
   categoryId     Int
   subcategoryId  String?
   type           String?
   meditationTags MeditationTags[]
-  category       Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  subcategory    Subcategory?     @relation(fields: [subcategoryId], references: [id])
+  category       Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  subcategory    Subcategory?         @relation(fields: [subcategoryId], references: [id])
   likedUsers     Liked[]
-  playlistItems PlaylistMeditation[]
+  playlistItems  PlaylistMeditation[]
 
   @@map("meditations")
 }
@@ -126,81 +126,122 @@ model Subcategory {
   @@map("subcategories")
 }
 
-
 model Liked {
-  id           String      @id @default(uuid())
+  id           String   @id @default(uuid())
   userId       BigInt
   meditationId String
-  createdAt    DateTime    @default(now())
+  createdAt    DateTime @default(now())
 
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  meditation   Meditation  @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meditation Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, meditationId])
   @@map("liked_meditations")
 }
 
 model ThoughtOfTheDay {
-  id              String    @id @default(cuid())
-  thumbnail       String   
-  link            String
-  title           String
-  duration        String  
-  description     String
-  scheduledAt     DateTime  
-  status          ThoughtStatus @default(PENDING)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id          String        @id @default(cuid())
+  thumbnail   String
+  link        String
+  title       String
+  duration    String
+  description String
+  scheduledAt DateTime
+  status      ThoughtStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
-
 
 enum ThoughtStatus {
-  PENDING   
-  POSTED    
-  REPOSTED  
+  PENDING
+  POSTED
+  REPOSTED
 }
 
-model Playlist {  
-  id          String              @id @default(uuid())
+model Playlist {
+  id          String   @id @default(uuid())
   name        String
   icon        String?
   description String?
-  isPublic    Boolean             @default(false)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   userId      BigInt
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items       PlaylistMeditation[]
+  user  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items PlaylistMeditation[]
 
   @@map("playlists")
 }
 
 model PlaylistMeditation {
-  id           String      @id @default(uuid())
+  id           String   @id @default(uuid())
   playlistId   String
   meditationId String
-  addedAt      DateTime    @default(now())
+  addedAt      DateTime @default(now())
   order        Int?
-  createdAt   DateTime     @default(now())
+  createdAt    DateTime @default(now())
 
-  playlist     Playlist    @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  meditation   Meditation  @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+  playlist   Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  meditation Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
 
   @@unique([playlistId, meditationId]) // prevent duplicate meditations in the same playlist
   @@map("playlist_meditations")
 }
 
 model Policy {
-  id           String   @id @default(cuid())
-  type         Int      // 1 = Privacy Policy, 2 = Terms & Conditions
-  content      String
-  active     Boolean  @default(true)
-  isDeleted    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(cuid())
+  type      Int // 1 = Privacy Policy, 2 = Terms & Conditions
+  content   String
+  active    Boolean  @default(true)
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("policy")
   @@index([type, active, isDeleted])
   @@index([type])
+  @@map("policy")
+}
+
+model OnboardingQuestion {
+  id        String             @id @default(uuid())
+  question  String
+  options   OnboardingOption[]
+  active    Boolean            @default(true)
+  isDeleted Boolean            @default(false)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([active, isDeleted])
+  @@map("onboarding_questions")
+}
+
+model OnboardingOption {
+  id         String   @id @default(uuid())
+  option     String
+  active     Boolean  @default(true)
+  isDeleted  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  questionId String
+
+  question OnboardingQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tags     OnboardingOptionTag[]
+
+  @@index([questionId])
+  @@map("onboarding_options")
+}
+
+model OnboardingOptionTag {
+  id        String   @id @default(uuid())
+  optionId  String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  option OnboardingOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, tagId])
+  @@index([optionId])
+  @@index([tagId])
+  @@map("onboarding_option_tags")
 }
