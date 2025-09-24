@@ -4,7 +4,6 @@ import { OTP } from '../../../domain/entities/user.js';
 export class PostgresOTPRepository extends OTPRepository {
   constructor(prisma) {
     super();
-    console.log('PostgresOTPRepository constructor called with prisma:', prisma); // Debug
     if (!prisma) {
       throw new Error('Prisma client is required for PostgresOTPRepository');
     }
@@ -34,7 +33,7 @@ export class PostgresOTPRepository extends OTPRepository {
           email: email.toLowerCase(),
           isValid: true
         },
-        orderBy: { createdAt: 'desc' } // This is correct - use the Prisma model field name
+        orderBy: { createdAt: 'desc' } 
       });
 
       if (!result) {

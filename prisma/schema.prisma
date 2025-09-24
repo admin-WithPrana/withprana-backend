@@ -190,3 +190,21 @@ model PlaylistMeditation {
   @@unique([playlistId, meditationId]) // prevent duplicate meditations in the same playlist
   @@map("playlist_meditations")
 }
+
+model Policy {
+  id           String   @id @default(cuid())
+  type         Int      // 1 = Privacy Policy, 2 = Terms & Conditions
+  version      String
+  content      String
+  effectiveDate DateTime
+  active     Boolean  @default(true)
+  isDeleted    Boolean  @default(false)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([type, version])
+@@map("policy")
+  @@index([type, active, isDeleted])
+  @@index([type, version])
+}

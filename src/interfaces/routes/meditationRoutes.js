@@ -20,8 +20,6 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
   app.post('/', async (req, reply) => {
     try {
       const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type,tags} = req.body;
-      console.log(req.body)
-
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
@@ -53,21 +51,15 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
 
           let parsedTags = [];
     if (tags) {
-      console.log('🔍 Processing tags...');
       
       if (tags.value) {
-        console.log('🔍 Tags has value property, extracting:', tags.value);
         try {
           parsedTags = JSON.parse(tags.value);
-          console.log('✅ Successfully parsed JSON from tags.value:', parsedTags);
         } catch (e) {
-          console.log('❌ JSON parse failed from tags.value, treating as comma-separated');
           parsedTags = tags.value.split(',').map(tag => tag.trim()).filter(tag => tag);
-          console.log('✅ Comma-separated tags from value:', parsedTags);
         }
       }
       else if (typeof tags === 'string') {
-        console.log('🔍 Tags is a string, attempting to parse...');
         try {
           parsedTags = JSON.parse(tags);
           console.log('✅ Successfully parsed JSON tags:', parsedTags);
