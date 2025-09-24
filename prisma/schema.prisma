@@ -194,17 +194,13 @@ model PlaylistMeditation {
 model Policy {
   id           String   @id @default(cuid())
   type         Int      // 1 = Privacy Policy, 2 = Terms & Conditions
-  version      String
   content      String
-  effectiveDate DateTime
   active     Boolean  @default(true)
   isDeleted    Boolean  @default(false)
-  metadata     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([type, version])
-@@map("policy")
+  @@map("policy")
   @@index([type, active, isDeleted])
-  @@index([type, version])
+  @@index([type])
 }
