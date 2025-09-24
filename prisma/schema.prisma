@@ -13,6 +13,7 @@ model Otp {
   otpCode   String   @map("otpcode")
   expiresAt DateTime @map("expires_at")
   isValid   Boolean  @default(true) @map("isvalid")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("otps")
 }
@@ -45,16 +46,18 @@ model Category {
 }
 
 model User {
-  id               BigInt   @id @default(autoincrement())
-  createdAt        DateTime @default(now()) @map("created_at")
+  id               BigInt    @id @default(autoincrement())
+  createdAt        DateTime  @default(now()) @map("created_at")
   name             String?
-  email            String   @unique
+  email            String    @unique
   password         String?
-  isVerified       Boolean  @default(false)
-  active           Boolean  @default(false)
-  signupMethod     String   @default("email")
-  subscriptionType String   @default("free")
+  image            String?
+  isVerified       Boolean   @default(false)
+  active           Boolean   @default(false)
+  signupMethod     String    @default("email") @db.VarChar(20)
+  subscriptionType String    @default("free")
   likedMeditations Liked[]
+  playlists        Playlist[]
 
   @@map("users")
 }
@@ -79,6 +82,7 @@ model Meditation {
   category       Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory    Subcategory?     @relation(fields: [subcategoryId], references: [id])
   likedUsers     Liked[]
+  playlistItems PlaylistMeditation[]
 
   @@map("meditations")
 }
@@ -154,4 +158,53 @@ enum ThoughtStatus {
   PENDING   
   POSTED    
   REPOSTED  
+}
+
+model Playlist {  
+  id          String              @id @default(uuid())
+  name        String
+  icon        String?
+  description String?
+  isPublic    Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  userId      BigInt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       PlaylistMeditation[]
+
+  @@map("playlists")
+}
+
+model PlaylistMeditation {
+  id           String      @id @default(uuid())
+  playlistId   String
+  meditationId String
+  addedAt      DateTime    @default(now())
+  order        Int?
+  createdAt   DateTime     @default(now())
+
+  playlist     Playlist    @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  meditation   Meditation  @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, meditationId]) // prevent duplicate meditations in the same playlist
+  @@map("playlist_meditations")
+}
+
+model Policy {
+  id           String   @id @default(cuid())
+  type         Int      // 1 = Privacy Policy, 2 = Terms & Conditions
+  version      String
+  content      String
+  effectiveDate DateTime
+  active     Boolean  @default(true)
+  isDeleted    Boolean  @default(false)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([type, version])
+@@map("policy")
+  @@index([type, active, isDeleted])
+  @@index([type, version])
 }

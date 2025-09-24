@@ -25,7 +25,6 @@ const startServer = async () => {
 
   const { prisma, mongoClient } = await initializeDatabaseConnections();
   const mailer = initializeMailer();
-  const otpRepository = new PostgresOTPRepository(prisma);
 
   const prismaRepository = { prisma };
   const mongoRepository = { mongo: mongoClient };

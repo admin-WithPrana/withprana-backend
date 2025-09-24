@@ -1,10 +1,14 @@
 export class User {
-    constructor({ id, name, email, password, isVerified = false }) {
+    constructor({ id, name, email, image, oauth, signupMethod, subscriptionType, isVerified = false }) {
       // this.id = id;
       this.name = name;
       this.email = email;
-      this.password = password;
-      // this.isVerified = isVerified;
+      this.image = image;
+      this.oauth = oauth;
+      this.signupMethod = signupMethod; // 'email', 'google', 'apple'
+      this.subscriptionType = subscriptionType; // 'free', 'premium',
+      this.isVerified = isVerified;
+      this.active = false;
     }
   
     validate() {

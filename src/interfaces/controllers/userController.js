@@ -83,4 +83,22 @@ export class UserController {
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
+
+  async updateUser(request, reply) {
+    try {
+      const userDTO = new CreateUserDTO(request.body);
+      const id = request.params.id;
+      userDTO.id = id;
+      const user = await this.userUseCases.updateUser(id, userDTO);
+      return reply.code(200).send({
+        success: true,
+        message: 'User updated successfully'
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message
+      });
+    }
+  }
 }

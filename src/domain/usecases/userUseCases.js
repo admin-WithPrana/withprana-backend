@@ -8,12 +8,27 @@ export class UserUseCases {
     this.mailer = mailer;
   }
 
+  subscriptionType = ['free', 'premium', 'enterprise'];
+  signupSelector(type) {
+    let subType = "email"
+    if(type=== 1){
+      subType="email"
+    }else if(type===2){  
+      subType="google"
+    }else if(type===3){  
+      subType="apple"
+    }
+    return subType;
+  }
 
   async registerUser(userData) {
     const user = new User({
       email: userData.email,
       name: userData.name,
-      password: null,
+      image:userData.image,
+      oauth: userData.oauth,
+      signupMethod: this.signupSelector(Number(userData.method)),
+      subscriptionType: 'free'
     });
 
     user.validate();
@@ -164,5 +179,9 @@ export class UserUseCases {
 
   async getUserById(id) {
     return this.userRepository.findById(id);
+  }
+
+  async updateUser(id, data) {
+    return this.userRepository.update(id, data);
   }
 }
