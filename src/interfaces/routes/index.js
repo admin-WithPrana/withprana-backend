@@ -8,6 +8,8 @@ import { tagsRoutes } from "./tagRoutes.js";
 import { likedRoutes } from "./likedRoutes.js";
 import { thoughtRoutes } from "./thoughOfTheDayRoute.js";
 import { playlistRoutes } from "./playListRoutes.js";
+import { policyRoutes } from "./privacyPolicyRoutes.js";
+import { onboardingRoutes } from "./onBoardingRoutes.js";
 
 export async function registerRoutes(app, deps) {
   app.register(
@@ -103,5 +105,25 @@ export async function registerRoutes(app, deps) {
       });
     },
     { prefix: "/api/playlist" }
+  );
+
+  app.register(
+    async function (privacyPolicyScope) {
+      policyRoutes(privacyPolicyScope, {
+        prismaRepository: deps.prismaRepository,
+        postQueue: deps.postQueue,
+      });
+    },
+    { prefix: "/api/privacy-policy" }
+  );
+
+  app.register(
+    async function (privacyPolicyScope) {
+      onboardingRoutes(privacyPolicyScope, {
+        prismaRepository: deps.prismaRepository,
+        postQueue: deps.postQueue,
+      });
+    },
+    { prefix: "/api/onboard" }
   );
 }

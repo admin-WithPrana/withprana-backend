@@ -84,7 +84,7 @@ export class PlaylistRepository {
   }
 
   async addMeditations(playlistId, meditationIds) {
-    console.log(playlistId,meditationIds)
+
   const ids = Array.isArray(meditationIds) ? meditationIds : [meditationIds];
 
   return this.prisma.playlistMeditation.createMany({

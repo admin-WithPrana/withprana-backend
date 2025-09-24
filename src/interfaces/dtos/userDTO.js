@@ -1,8 +1,10 @@
 export class CreateUserDTO {
-    constructor({ name, email, password }) {
+    constructor({ name, email, image, oauth, method }) {
       this.name = name;
       this.email = email;
-      this.password = password;
+      this.image = image;
+      this.oauth = oauth;
+      this.method = method;
     }
   }
   

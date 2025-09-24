@@ -28,21 +28,6 @@ export class PlaylistController {
     }
   }
 
-//   async getById(req, reply) {
-//     try {
-//       const { id } = req.params;
-//       const playlist = await this.usecase.getPlaylistById(id);
-//       if (!playlist) {
-//         return reply.code(404).send({ message: "Playlist not found" });
-//       }
-//       return reply.code(200).send({
-//         message: "Playlist fetched successfully",
-//         data: playlist,
-//       });
-//     } catch (err) {
-//       return reply.code(400).send({ error: err.message });
-//     }
-//   }
 async getById(req, reply) {
   try {
     const { id } = req.params;
