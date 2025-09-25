@@ -4,7 +4,6 @@ export class OnBoardingRepository {
     }
   
     async createQuestion(data) {
-      
       return await this.prisma.onboardingQuestion.create({
         data: {
           question: data.question,
