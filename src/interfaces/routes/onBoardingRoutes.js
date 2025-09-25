@@ -1,9 +1,9 @@
-import { OnboardingRepository } from "../../infrastructure/databases/postgres/OnboardingRepository.js";
+import { OnBoardingRepository } from "../../infrastructure/databases/postgres/OnboardingRepository.js";
 import { OnboardingUsecase } from "../../domain/usecases/onBoardingUsecase.js";
 import { OnboardingController } from "../controllers/onBoardingController.js";
 
 export const onboardingRoutes = async (app, { prismaRepository }) => {
-  const repo = new OnboardingRepository(prismaRepository.prisma);
+  const repo = new OnBoardingRepository(prismaRepository.prisma);
   const usecase = new OnboardingUsecase(repo);
   const controller = new OnboardingController(usecase);
   
