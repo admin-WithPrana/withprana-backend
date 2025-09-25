@@ -1,6 +1,6 @@
-import { OnBoardingRepository } from "../../infrastructure/databases/postgres/OnboardingRepository.js";
-import { OnBoardingUsecase } from "../../domain/usecases/onBoardingUsecase.js";
-import { OnBoardingController } from "../controllers/onBoardingController.js";
+import { OnBoardingRepository } from "../../infrastructure/databases/postgres/OnBoardingRepository.js";
+import { OnboardingUsecase } from "../../domain/usecases/onBoardingUsecase.js";
+import { OnboardingController } from "../controllers/onBoardingController.js";
 
 export const onboardingRoutes = async (app, { prismaRepository }) => {
   const repo = new OnBoardingRepository(prismaRepository.prisma);
