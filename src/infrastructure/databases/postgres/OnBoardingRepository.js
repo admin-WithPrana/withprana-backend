@@ -26,7 +26,11 @@ export class OnBoardingRepository {
         include: {
           options: {
             include: {
-              tags: true
+              tags: {
+                include:{
+                tag:true
+                }
+              }
             }
           }
         }
@@ -67,7 +71,11 @@ export class OnBoardingRepository {
         include: {
           options: {
             include: {
-              tags: true
+               tags: {
+                include:{
+                tag:true
+                }
+              }
             }
           }
         }
@@ -96,7 +104,11 @@ export class OnBoardingRepository {
         include: {
           options: {
             include: {
-              tags: true
+              tags: {
+                include:{
+                tag:true
+                }
+              }
             }
           }
         }
@@ -161,7 +173,11 @@ export class OnBoardingRepository {
           question: true,
           option: {
             include: {
-              tags: true
+               tags: {
+                include:{
+                tag:true
+                }
+              }
             }
           }
         }
