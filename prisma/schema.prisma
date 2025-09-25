@@ -95,6 +95,7 @@ model Tag {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   meditationTags MeditationTags[]
+  onboardingOptionTags  OnboardingOptionTag[] 
 
   @@map("tags")
 }
@@ -104,6 +105,7 @@ model MeditationTags {
   tagId        String
   meditation   Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
   tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
 
   @@id([meditationId, tagId])
   @@map("meditation_tags")
@@ -191,7 +193,7 @@ model PlaylistMeditation {
 
 model Policy {
   id        String   @id @default(cuid())
-  type      Int // 1 = Privacy Policy, 2 = Terms & Conditions
+  type      Int      @unique        // 1 = Privacy Policy, 2 = Terms & Conditions
   content   String
   active    Boolean  @default(true)
   isDeleted Boolean  @default(false)
@@ -239,6 +241,7 @@ model OnboardingOptionTag {
   createdAt DateTime @default(now())
 
   option OnboardingOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([optionId, tagId])
   @@index([optionId])
