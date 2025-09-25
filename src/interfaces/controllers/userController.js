@@ -178,7 +178,7 @@ export class UserController {
   async login(request, reply) {
     try {
       const userDTO = new CreateUserDTO(request.body);
-      const result = await this.userUseCases.login(userDTO.email);
+      const result = await this.userUseCases.login(userDTO.email,userDTO.oauth);
   
       // Handle different response structures based on success and OAuth status
       if (result.success) {

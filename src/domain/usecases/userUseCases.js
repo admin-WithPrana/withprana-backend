@@ -459,7 +459,7 @@ export class UserUseCases {
     };
   }
 
-  async login(email) {
+  async login(email,oauth) {
     try {
       const existingUser = await this.userRepository.findByEmail(email);
 
@@ -471,16 +471,23 @@ export class UserUseCases {
         return { success: false, message: "Login blocked by admin" };
       }
 
-      // If OAuth user, return token directly without OTP
-      if (existingUser.signupMethod !== "email") {
-        const token = this.generateToken(existingUser);
+      if (["google", "apple"].includes(existingUser.signupMethod)) {
         return {
-          success: true,
-          token,
-          // oauth: true,
-          message: "Login successful"
+          success: false,
+          message: `This email is linked with ${existingUser.signupMethod} sign-in. Please use ${existingUser.signupMethod} to log in.`
         };
       }
+      
+
+      // if (existingUser.signupMethod !== "email" && oauth == true) {
+      //   const token = this.generateToken(existingUser);
+      //   return {
+      //     success: true,
+      //     token,
+      //     // oauth: true,
+      //     message: "Login successful"
+      //   };
+      // }
 
       // Regular email login flow
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
