@@ -17,9 +17,28 @@ export class PrismaUserRepository {
     }
   }
 
+  // async createUser(user) {
+  //   try {
+  //      await this.prisma.user.create({ 
+  //       data: {
+  //         image: user.image,
+  //         signupMethod: user.signupMethod,
+  //         subscriptionType: user.subscriptionType,
+  //         email: user.email.toLowerCase(),
+  //         name: user.name,
+  //         password: user.password,
+  //         isVerified: user?.isVerified || false ,
+  //         active: user?.active || false
+  //       } 
+  //     });
+  //   } catch (error) {
+  //     console.error('Error creating user:', error);
+  //     throw error;
+  //   }
+  // }
   async createUser(user) {
     try {
-       await this.prisma.user.create({ 
+      const newUser = await this.prisma.user.create({
         data: {
           image: user.image,
           signupMethod: user.signupMethod,
@@ -27,15 +46,18 @@ export class PrismaUserRepository {
           email: user.email.toLowerCase(),
           name: user.name,
           password: user.password,
-          isVerified: false,
-          active: false
-        } 
+          isVerified: user?.isVerified ?? false,
+          active: user?.active ?? false,
+        },
       });
+  
+      return newUser; 
     } catch (error) {
-      console.error('Error creating user:', error);
+      console.error("Error creating user:", error);
       throw error;
     }
   }
+  
 
   async verifyEmail(email) {
     try {

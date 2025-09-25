@@ -1,35 +1,9 @@
-// import { UserController } from '../controllers/userController.js';
-// import { PostgresOTPRepository } from '../../infrastructure/databases/postgres/otpRepository.js';
-// import {PrismaUserRepository}  from "../../infrastructure/databases/postgres/userRepository.js"
-
-// // userRoutes.js
-// export const setupRoutes = (app, { prismaRepository, mailer }) => {
-//   if (!prismaRepository || !prismaRepository.prisma) {
-//     throw new Error('Prisma client is not properly initialized');
-//   }
-
-//   const otpRepo = new PostgresOTPRepository(prismaRepository.prisma);
-//   const userRepo = new PrismaUserRepository(prismaRepository.prisma);
-
-//   const userController = new UserController(
-//     userRepo,
-//     otpRepo,
-//     mailer
-//   );
-
-//   app.post('/register', (request, reply) => userController.register(request, reply));
-//   app.post('/verify', (request, reply) => userController.verify(request, reply));
-//   app.post('/resend-otp', (request, reply) => userController.resendOTP(request, reply));
-//   app.post('/login', (request, reply) => userController.login(request, reply));
-//   app.get('/:id', (request, reply) => userController.getUserById(request, reply));
-// };
 import { UserController } from '../controllers/userController.js';
 import { PostgresOTPRepository } from '../../infrastructure/databases/postgres/otpRepository.js';
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 import fastifyMultipart from '@fastify/multipart';
 import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
 
-// userRoutes.js
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
     throw new Error('Prisma client is not properly initialized');
@@ -113,13 +87,15 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         }
       }
 
-      const updatePayload = {
-        ...(name !== undefined && { name: typeof name === 'object' ? name.value : name }),
-        // ...(email !== undefined && { email: typeof email === 'object' ? email.value : email }),
-        ...(profilePictureUrl !== undefined && { profilePicture: profilePictureUrl }),
+      const payload = {
+        name: typeof name === 'object' ? name.value : name
       };
 
-      await userController.updateUser({ ...request, params: { id }, body: updatePayload }, reply);
+      if(profilePictureUrl !== ""){
+        payload.image = profilePictureUrl
+      }
+
+      await userController.updateUser({ ...request, params: { id }, body: payload }, reply);
 
     } catch (error) {
       console.error('User update error:', error);
