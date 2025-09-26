@@ -208,4 +208,136 @@ async findAll( limit = 10, page=1,sort,order) {
       data: { isDeleted: true },
     });
   }
+
+  // async findByUserSelectedTags(userId, limit = 10, page = 1, sort, order) {
+  //   const userIdBigInt = BigInt(userId);
+
+  //   const skip = (Number(page || 1) - 1) * Number(limit || 10);
+
+  //   // Fetch the user's selected tag IDs
+  //   const userTags = await this.prisma.userTag.findMany({
+  //     where: { userId: userIdBigInt },
+  //     select: { tagId: true }
+  //   });
+
+  //   const tagIds = userTags.map(ut => ut.tagId);
+
+  //   if (tagIds.length === 0) {
+  //     return {
+  //       data: [],
+  //       pagination: {
+  //         total: 0,
+  //         page: Number(page || 1),
+  //         limit: Number(limit || 10),
+  //         totalPages: 0,
+  //       },
+  //     };
+  //   }
+
+  //   const [data, total] = await Promise.all([
+  //     this.prisma.meditation.findMany({
+  //       where: {
+  //         isDeleted: false,
+  //         meditationTags: {
+  //           some: { tagId: { in: tagIds } }
+  //         }
+  //       },
+  //       include: {
+  //         category: true,
+  //         subcategory: true,
+  //         meditationTags: { include: { tag: true } }
+  //       },
+  //       orderBy: {
+  //         [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+  //       },
+  //       take: Number(limit || 10),
+  //       skip: Number(skip || 0),
+  //     }),
+  //     this.prisma.meditation.count({
+  //       where: {
+  //         isDeleted: false,
+  //         meditationTags: {
+  //           some: { tagId: { in: tagIds } }
+  //         }
+  //       },
+  //     }),
+  //   ]);
+
+  //   return {
+  //     data,
+  //     pagination: {
+  //       total,
+  //       page: Number(page || 1),
+  //       limit: Number(limit || 10),
+  //       totalPages: Math.ceil(total / (limit || 10)),
+  //     },
+  //   };
+  // }
+  async findByUserSelectedTags(userId, limit = 10, page = 1, sort, order) {
+    const userIdBigInt = BigInt(userId);
+  
+    const skip = (Number(page || 1) - 1) * Number(limit || 10);
+  
+    // Fetch the user's selected tag IDs
+    const userTags = await this.prisma.userTag.findMany({
+      where: { userId: userIdBigInt },
+      select: { tagId: true }
+    });
+  
+    const tagIds = userTags.map(ut => ut.tagId);
+  
+    if (tagIds.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          total: 0,
+          page: Number(page || 1),
+          limit: Number(limit || 10),
+          totalPages: 0,
+        },
+      };
+    }
+  
+    const [data, total] = await Promise.all([
+      this.prisma.meditation.findMany({
+        where: {
+          isDeleted: false,
+          meditationTags: {
+            some: { tagId: { in: tagIds } }
+          }
+        },
+        select: {
+          id: true,
+          thumbnail: true,
+          title: true,
+          description: true,
+          duration: true,
+        },
+        orderBy: {
+          [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+        },
+        take: Number(limit || 10),
+        skip: Number(skip || 0),
+      }),
+      this.prisma.meditation.count({
+        where: {
+          isDeleted: false,
+          meditationTags: {
+            some: { tagId: { in: tagIds } }
+          }
+        },
+      }),
+    ]);
+  
+    return {
+      data,
+      pagination: {
+        total,
+        page: Number(page || 1),
+        limit: Number(limit || 10),
+        totalPages: Math.ceil(total / (limit || 10)),
+      },
+    };
+  }
+  
 }

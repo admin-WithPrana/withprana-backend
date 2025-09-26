@@ -3,6 +3,7 @@ import { MeditationUsecase } from '../../domain/usecases/meditationUsecase.js';
 import { MeditationController } from '../controllers/meditationController.js';
 import fastifyMultipart from '@fastify/multipart';
 import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
+import { authMiddleware } from '../../infrastructure/services/middleware.js';
 
 export const meditationRoutes = async (app, { prismaRepository }) => {
   const repo = new MeditationRepository(prismaRepository.prisma);
@@ -167,4 +168,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
   app.get('/subcategory', (req, reply) => controller.getMeditationBySubCategoryId(req, reply));
    app.get('/category', (req, reply) => controller.getMeditationByCategoryId(req, reply));
   app.delete('/:id', (req, reply) => controller.delete(req, reply));
+
+  // Get meditations by the current user's selected tags
+  app.get('/by-user-tags', { preHandler: authMiddleware }, (req, reply) => controller.getByUserSelectedTags(req, reply));
 };

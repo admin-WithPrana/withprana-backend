@@ -10,6 +10,7 @@ import { thoughtRoutes } from "./thoughOfTheDayRoute.js";
 import { playlistRoutes } from "./playListRoutes.js";
 import { policyRoutes } from "./privacyPolicyRoutes.js";
 import { onboardingRoutes } from "./onBoardingRoutes.js";
+import {userTagsRoutes} from "./userTagRoutes.js"
 
 export async function registerRoutes(app, deps) {
   app.register(
@@ -125,5 +126,14 @@ export async function registerRoutes(app, deps) {
       });
     },
     { prefix: "/api/onboard" }
+  );
+
+  app.register(
+    async function (tagsScope) {
+      userTagsRoutes(tagsScope, {
+        prismaRepository: deps.prismaRepository,
+      });
+    },
+    { prefix: "/api/usertags" }
   );
 }
