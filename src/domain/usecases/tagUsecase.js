@@ -36,4 +36,5 @@ export class TagsUsecase {
             throw new Error(`Failed to get tags: ${error.message}`);
         }
     }
+
 }

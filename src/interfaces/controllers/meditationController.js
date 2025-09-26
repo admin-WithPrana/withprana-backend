@@ -80,6 +80,17 @@ export class MeditationController {
     }
   }
 
+  async getByUserSelectedTags(req, reply) {
+    try {
+      const user = req.user;
+      const { limit, page, sort, order } = req.query || {};
+      const result = await this.meditationUsecase.getMeditationsByUserSelectedTags(user?.id, limit, page, sort, order);
+      reply.send(result);
+    } catch (err) {
+      reply.status(500).send({ message: err.message });
+    }
+  }
+
   async update(req, reply) {
   try {
     const  id  = req.id;

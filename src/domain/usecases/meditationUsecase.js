@@ -54,6 +54,13 @@ export class MeditationUsecase {
     return this.meditationRepository.findAll(limit,page,sort,order);
   }
 
+  async getMeditationsByUserSelectedTags(userId, limit, page, sort, order) {
+    if (!userId) {
+      throw new Error('User authentication required');
+    }
+    return this.meditationRepository.findByUserSelectedTags(userId, limit, page, sort, order);
+  }
+
   async updateMeditation(id, data) {
     await this.getMeditationById(id);
     return this.meditationRepository.update(id, data);
