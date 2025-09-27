@@ -209,82 +209,178 @@ async findAll( limit = 10, page=1,sort,order) {
     });
   }
 
+  // async findByUserSelectedTags(userId, limit = 10, page = 1, sort, order) {
+  //   const userIdBigInt = BigInt(userId);
+  //   const skip = (Number(page || 1) - 1) * Number(limit || 10);
+
+  //   // Fetch the user's selected tag IDs
+  //   const userTags = await this.prisma.userTag.findMany({
+  //     where: { userId: userIdBigInt },
+  //     select: { tagId: true }
+  //   });
+
+  //   const tagIds = userTags.map(ut => ut.tagId);
+
+  //   if (tagIds.length === 0) {
+  //     return {
+  //       data: [],
+  //       pagination: {
+  //         total: 0,
+  //         page: Number(page || 1),
+  //         limit: Number(limit || 10),
+  //         totalPages: 0,
+  //       },
+  //     };
+  //   }
+
+  //   const [data, total] = await Promise.all([
+  //     this.prisma.meditation.findMany({
+  //       where: {
+  //         isDeleted: false,
+  //         meditationTags: {
+  //           some: { tagId: { in: tagIds } }
+  //         }
+  //       },
+  //       include: {
+  //         category: true,
+  //         subcategory: true,
+  //         // meditationTags: { include: { tag: true } },
+  //         likedUsers: {
+  //           where: {
+  //             userId: userIdBigInt
+  //           },
+  //           select: {
+  //             id: true
+  //           }
+  //         }
+  //       },
+  //       orderBy: {
+  //         [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+  //       },
+  //       take: Number(limit || 10),
+  //       skip: Number(skip || 0),
+  //     }),
+  //     this.prisma.meditation.count({
+  //       where: {
+  //         isDeleted: false,
+  //         meditationTags: {
+  //           some: { tagId: { in: tagIds } }
+  //         }
+  //       },
+  //     }),
+  //   ]);
+
+  //   // Transform the data to include isLiked field
+  //   const transformedData = data.map(meditation => ({
+  //     ...meditation,
+  //     isLiked: meditation.likedUsers.length > 0
+  //   }));
+
+  //   return {
+  //     data: transformedData,
+  //     pagination: {
+  //       total,
+  //       page: Number(page || 1),
+  //       limit: Number(limit || 10),
+  //       totalPages: Math.ceil(total / (limit || 10)),
+  //     },
+  //   };
+  // }
   async findByUserSelectedTags(userId, limit = 10, page = 1, sort, order) {
-    const userIdBigInt = BigInt(userId);
-    const skip = (Number(page || 1) - 1) * Number(limit || 10);
-
-    // Fetch the user's selected tag IDs
-    const userTags = await this.prisma.userTag.findMany({
-      where: { userId: userIdBigInt },
-      select: { tagId: true }
-    });
-
-    const tagIds = userTags.map(ut => ut.tagId);
-
-    if (tagIds.length === 0) {
+    try {
+      console.log('Method called with:', { userId, limit, page, sort, order });
+  
+      const userIdBigInt = BigInt(userId);
+      const skip = (Number(page || 1) - 1) * Number(limit || 10);
+  
+      // Fetch the user's selected tag IDs
+      console.log('Fetching user tags...');
+      const userTags = await this.prisma.userTag.findMany({
+        where: { userId: userIdBigInt },
+        select: { tagId: true }
+      });
+      console.log('User tags found:', userTags.length);
+  
+      const tagIds = userTags.map(ut => ut.tagId);
+      console.log('Tag IDs:', tagIds);
+  
+      if (tagIds.length === 0) {
+        console.log('No tags found for user');
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            page: Number(page || 1),
+            limit: Number(limit || 10),
+            totalPages: 0,
+          },
+        };
+      }
+  
+      console.log('Executing parallel queries...');
+      const [data, total] = await Promise.all([
+        this.prisma.meditation.findMany({
+          where: {
+            isDeleted: false,
+            meditationTags: {
+              some: { tagId: { in: tagIds } }
+            }
+          },
+          include: {
+            category: true,
+            subcategory: true,
+            likedUsers: {
+              where: {
+                userId: userIdBigInt
+              },
+              select: {
+                id: true
+              }
+            }
+          },
+          orderBy: {
+            [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+          },
+          take: Number(limit || 10),
+          skip: Number(skip || 0),
+        }),
+        this.prisma.meditation.count({
+          where: {
+            isDeleted: false,
+            meditationTags: {
+              some: { tagId: { in: tagIds } }
+            }
+          },
+        }),
+      ]);
+  
+      console.log('Data found:', data.length);
+      console.log('Total count:', total);
+  
+      // Transform the data to include isLiked field
+      const transformedData = data.map(meditation => ({
+        ...meditation,
+        isLiked: meditation.likedUsers.length > 0
+      }));
+  
       return {
-        data: [],
+        data: transformedData,
         pagination: {
-          total: 0,
+          total,
           page: Number(page || 1),
           limit: Number(limit || 10),
-          totalPages: 0,
+          totalPages: Math.ceil(total / (limit || 10)),
         },
       };
+    } catch (error) {
+      console.error('Error in findByUserSelectedTags:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      throw error;
     }
-
-    const [data, total] = await Promise.all([
-      this.prisma.meditation.findMany({
-        where: {
-          isDeleted: false,
-          meditationTags: {
-            some: { tagId: { in: tagIds } }
-          }
-        },
-        include: {
-          category: true,
-          subcategory: true,
-          // meditationTags: { include: { tag: true } },
-          likedUsers: {
-            where: {
-              userId: userIdBigInt
-            },
-            select: {
-              id: true
-            }
-          }
-        },
-        orderBy: {
-          [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
-        },
-        take: Number(limit || 10),
-        skip: Number(skip || 0),
-      }),
-      this.prisma.meditation.count({
-        where: {
-          isDeleted: false,
-          meditationTags: {
-            some: { tagId: { in: tagIds } }
-          }
-        },
-      }),
-    ]);
-
-    // Transform the data to include isLiked field
-    const transformedData = data.map(meditation => ({
-      ...meditation,
-      isLiked: meditation.likedUsers.length > 0
-    }));
-
-    return {
-      data: transformedData,
-      pagination: {
-        total,
-        page: Number(page || 1),
-        limit: Number(limit || 10),
-        totalPages: Math.ceil(total / (limit || 10)),
-      },
-    };
   }
   
 }
