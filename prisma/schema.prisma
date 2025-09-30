@@ -60,6 +60,9 @@ model User {
   playlists        Playlist[]
   userTags         UserTag[]
 
+  subscriptions Subscription[]
+  transactions  Transaction[]
+
   @@map("users")
 }
 
@@ -89,15 +92,15 @@ model Meditation {
 }
 
 model Tag {
-  id             String           @id @default(cuid())
-  name           String           @unique
-  active         Boolean          @default(true)
-  isDeleted      Boolean          @default(false)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  meditationTags MeditationTags[]
-  onboardingOptionTags  OnboardingOptionTag[]
-  userTags       UserTag[]
+  id                   String                @id @default(cuid())
+  name                 String                @unique
+  active               Boolean               @default(true)
+  isDeleted            Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  meditationTags       MeditationTags[]
+  onboardingOptionTags OnboardingOptionTag[]
+  userTags             UserTag[]
 
   @@map("tags")
 }
@@ -107,7 +110,6 @@ model MeditationTags {
   tagId        String
   meditation   Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
   tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
 
   @@id([meditationId, tagId])
   @@map("meditation_tags")
@@ -195,7 +197,7 @@ model PlaylistMeditation {
 
 model Policy {
   id        String   @id @default(cuid())
-  type      Int      @unique        // 1 = Privacy Policy, 2 = Terms & Conditions
+  type      Int      @unique // 1 = Privacy Policy, 2 = Terms & Conditions
   content   String
   active    Boolean  @default(true)
   isDeleted Boolean  @default(false)
@@ -243,7 +245,7 @@ model OnboardingOptionTag {
   createdAt DateTime @default(now())
 
   option OnboardingOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tag    Tag              @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([optionId, tagId])
   @@index([optionId])
@@ -264,4 +266,82 @@ model UserTag {
   @@index([userId])
   @@index([tagId])
   @@map("user_tags")
+}
+
+// subscription models
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  name          String
+  price         Float
+  currency      String   @default("usd")
+  interval      String
+  intervalCount Int      @default(1) // Duration multiplier
+  trialDays     Int?
+  stripePriceId String?  @unique
+  visible       Boolean  @default(true) // Visibility in app
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               BigInt
+  planId               String
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+  transactions Transaction[]
+
+  @@unique([userId, status])
+  @@map("subscriptions")
+}
+
+model Transaction {
+  id                    String            @id @default(cuid())
+  subscriptionId        String?
+  userId                BigInt
+  amount                Float
+  currency              String            @default("usd")
+  status                TransactionStatus @default(PENDING)
+  stripePaymentIntentId String?           @unique
+  stripeInvoiceId       String?
+  description           String?
+  metadata              Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  UNPAID
+  INCOMPLETE
+  TRIALING
+  INCOMPLETE_EXPIRED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
 }
