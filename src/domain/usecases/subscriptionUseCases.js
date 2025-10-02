@@ -7,7 +7,6 @@ export class SubscriptionUseCases {
 
   async createSubscriptionCheckout(userId, planId) {
     try {
-      console.log(this.userRepo)
       const user = await this.userRepo.findById(userId);
       if (!user) {
         throw new Error('User not found');
@@ -18,6 +17,7 @@ export class SubscriptionUseCases {
         throw new Error('Invalid subscription plan');
       }
 
+      // Check for active subscription
       const activeSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(userId);
       if (activeSubscription) {
         throw new Error('User already has an active subscription');
@@ -25,164 +25,322 @@ export class SubscriptionUseCases {
 
       let stripeCustomerId = user.stripeCustomerId;
 
+      // Create Stripe customer if doesn't exist
       if (!stripeCustomerId) {
-        const customer = await this.stripeService.createCustomer(user);
+        const customer = await this.stripeService.stripe.customers.create({
+          email: user.email,
+          name: user.name,
+          metadata: {
+            userId: userId.toString()
+          }
+        });
         stripeCustomerId = customer.id;
         await this.subscriptionRepo.updateUserStripeCustomerId(userId, stripeCustomerId);
       }
 
-      const subscription = await this.stripeService.createSubscription(
-        stripeCustomerId,
-        plan.stripePriceId
-      );
-
-      const dbSubscription = await this.subscriptionRepo.createSubscription({
-        userId,
-        planId: plan.id,
-        stripeSubscriptionId: subscription.id,
-        stripeCustomerId,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-        status: 'ACTIVE',
+      // Create ONE-TIME payment session (not subscription)
+      const session = await this.stripeService.stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: plan.currency.toLowerCase(),
+              product_data: {
+                name: plan.name,
+                description: `${plan.intervalCount} ${plan.interval}(s) subscription`
+              },
+              unit_amount: Math.round(plan.price * 100), // Convert to cents
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment', // One-time payment, NOT subscription
+        success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+        metadata: {
+          userId: userId.toString(),
+          planId: plan.id,
+          type: 'SUBSCRIPTION_PAYMENT'
+        },
       });
 
-      // Update user subscription type
-      await this.userRepo.update(userId, {
-        subscriptionType: 'premium',
+      // Create pending transaction
+      await this.subscriptionRepo.createTransaction({
+        userId,
+        planId: plan.id,
+        amount: plan.price,
+        currency: plan.currency,
+        status: 'PENDING',
+        type: 'SUBSCRIPTION',
+        stripePaymentIntentId: session.payment_intent || null,
+        metadata: {
+          checkoutSessionId: session.id,
+          planName: plan.name,
+          stripeCustomerId: stripeCustomerId,
+          planInterval: plan.interval,
+          planIntervalCount: plan.intervalCount
+        }
       });
 
       return {
-        subscriptionId: dbSubscription.id,
-        clientSecret: subscription.latest_invoice.payment_intent.client_secret,
-        stripeSubscriptionId: subscription.id,
+        success: true,
+        sessionId: session.id,
+        paymentUrl: session.url,
+        message: 'Payment session created successfully'
       };
     } catch (error) {
-      throw new Error(`Failed to create subscription: ${error.message}`);
+      console.error(error)
+      throw new Error(`Failed to create payment session: ${error.message}`);
     }
   }
 
+  async createAppSubscriptionCheckout(userId, planId) {
+    try {
+      const user = await this.userRepo.findById(userId);
+      if (!user) throw new Error('User not found');
+  
+      const plan = await this.subscriptionRepo.findPlanById(planId);
+      if (!plan) throw new Error('Invalid subscription plan');
+
+      console.log(plan,"plan")
+  
+      // Check for active subscription
+      const activeSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(userId);
+      if (activeSubscription) throw new Error('User already has an active subscription');
+  
+      let stripeCustomerId = user.stripeCustomerId;
+  
+      // Create Stripe customer if doesn't exist
+      if (!stripeCustomerId) {
+        const customer = await this.stripeService.stripe.customers.create({
+          email: user.email,
+          name: user.name,
+          metadata: { userId: userId.toString() }
+        });
+        stripeCustomerId = customer.id;
+        await this.subscriptionRepo.updateUserStripeCustomerId(userId, stripeCustomerId);
+      }
+  
+      // Create PaymentIntent for mobile
+      const paymentIntent = await this.stripeService.stripe.paymentIntents.create({
+        amount: Math.round(plan.price * 100), // Convert to cents
+        currency: plan.currency.toLowerCase(),
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        metadata: {
+          userId: userId.toString(),
+          planId: plan?.id,
+          type: 'SUBSCRIPTION_PAYMENT'
+        }
+      });
+
+      // Create pending transaction in DB
+      await this.subscriptionRepo.createTransaction({
+        userId,
+        planId: plan?.id,
+        amount: plan?.price,
+        currency: plan?.currency,
+        status: 'PENDING',
+        type: 'SUBSCRIPTION',
+        stripePaymentIntentId: paymentIntent?.id,
+        metadata: {
+          planName: plan?.name,
+          stripeCustomerId: stripeCustomerId,
+          planInterval: plan?.interval,
+          planIntervalCount: plan?.intervalCount
+        }
+      });
+  
+      return {
+        success: true,
+        clientSecret: paymentIntent?.client_secret,
+        message: 'Payment initiated successfully for mobile'
+      };
+  
+    } catch (error) {
+      console.error(error)
+      throw new Error(`Failed to create mobile payment: ${error.message}`);
+    }
+  }
+  
+
+  // async handleWebhookEvent(payload, signature) {
+  //   try {
+  //     console.log(payload, signature)
+  //     const event = this.stripeService.constructEvent(
+  //       payload,
+  //       signature,
+  //       process.env.STRIPE_WEBHOOK_SECRET
+  //     );
+
+  //     console.log(`Received webhook event: ${event.type}`);
+
+  //     switch (event.type) {
+  //       case 'checkout.session.completed':
+  //         await this.handleCheckoutSessionCompleted(event.data.object);
+  //         break;
+        
+  //       case 'checkout.session.async_payment_succeeded':
+  //         await this.handleCheckoutSessionCompleted(event.data.object);
+  //         break;
+        
+  //       case 'payment_intent.succeeded':
+  //         await this.handlePaymentIntentSucceeded(event.data.object);
+  //         break;
+        
+  //       case 'payment_intent.payment_failed':
+  //         await this.handlePaymentIntentFailed(event.data.object);
+  //         break;
+        
+  //       default:
+  //         console.log(`Unhandled event type: ${event.type}`);
+  //     }
+  //   } catch (error) {
+  //     console.error('Webhook error:', error);
+  //     throw new Error(`Webhook handling failed: ${error.message}`);
+  //   }
+  // }
   async handleWebhookEvent(event) {
     try {
+      console.log(`Received webhook event: ${event.type}`);
+  
       switch (event.type) {
-        case 'invoice.payment_succeeded':
-          await this.handleInvoicePaymentSucceeded(event.data.object);
+        case 'checkout.session.completed':
+        case 'checkout.session.async_payment_succeeded':
+          await this.handleCheckoutSessionCompleted(event.data.object);
           break;
-        
-        case 'invoice.payment_failed':
-          await this.handleInvoicePaymentFailed(event.data.object);
+  
+        case 'payment_intent.succeeded':
+          await this.handlePaymentIntentSucceeded(event.data.object);
           break;
-        
-        case 'customer.subscription.updated':
-          await this.handleSubscriptionUpdated(event.data.object);
+  
+        case 'payment_intent.payment_failed':
+          await this.handlePaymentIntentFailed(event.data.object);
           break;
-        
-        case 'customer.subscription.deleted':
-          await this.handleSubscriptionDeleted(event.data.object);
-          break;
-        
+  
         default:
           console.log(`Unhandled event type: ${event.type}`);
       }
     } catch (error) {
+      console.error('Webhook error:', error);
       throw new Error(`Webhook handling failed: ${error.message}`);
     }
   }
+  
 
-  async handleInvoicePaymentSucceeded(invoice) {
-    const subscription = await this.subscriptionRepo.findSubscriptionByStripeId(invoice.subscription);
-    
-    if (subscription) {
-      // Update subscription period
-      await this.subscriptionRepo.updateSubscription(subscription.id, {
-        currentPeriodStart: new Date(invoice.period_start * 1000),
-        currentPeriodEnd: new Date(invoice.period_end * 1000),
-        status: 'ACTIVE',
-      });
+  async handleCheckoutSessionCompleted(session) {
+    try {
+      const { userId, planId, type } = session.metadata;
+      
+      if (!userId || !planId || type !== 'SUBSCRIPTION_PAYMENT') {
+        console.warn('Invalid metadata in checkout session:', session.id);
+        return;
+      }
 
-      // Create transaction record
-      await this.subscriptionRepo.createTransaction({
-        userId: subscription.userId,
-        subscriptionId: subscription.id,
-        planId: subscription.planId,
-        amount: invoice.amount_paid / 100,
-        stripePaymentIntentId: invoice.payment_intent,
-        stripeInvoiceId: invoice.id,
-        status: 'SUCCEEDED',
-        type: 'SUBSCRIPTION',
-      });
-    }
-  }
-
-  async handleInvoicePaymentFailed(invoice) {
-    const subscription = await this.subscriptionRepo.findSubscriptionByStripeId(invoice.subscription);
-    
-    if (subscription) {
-      await this.subscriptionRepo.createTransaction({
-        userId: subscription.userId,
-        subscriptionId: subscription.id,
-        planId: subscription.planId,
-        amount: invoice.amount_due / 100,
-        stripePaymentIntentId: invoice.payment_intent,
-        stripeInvoiceId: invoice.id,
-        status: 'FAILED',
-        type: 'SUBSCRIPTION',
-      });
-
-      // Optionally downgrade user after multiple failed payments
-      await this.checkAndHandleFailedPayments(subscription.userId);
-    }
-  }
-
-  async handleSubscriptionUpdated(stripeSubscription) {
-    const subscription = await this.subscriptionRepo.findSubscriptionByStripeId(stripeSubscription.id);
-    
-    if (subscription) {
-      await this.subscriptionRepo.updateSubscription(subscription.id, {
-        status: stripeSubscription.status.toUpperCase(),
-        currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
-        cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
-      });
-
-      // If subscription is no longer active, downgrade user
-      if (!['active', 'trialing'].includes(stripeSubscription.status)) {
-        await this.userRepo.update(subscription.userId, {
-          subscriptionType: 'free',
+      // Check if subscription already exists to prevent duplicates
+      const existingSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(BigInt(userId));
+      if (existingSubscription) {
+        console.log('Subscription already exists for user:', userId);
+        // Still update transaction status
+        await this.subscriptionRepo.updateTransactionByCheckoutSession(session.id, {
+          status: 'SUCCEEDED',
+          stripePaymentIntentId: session.payment_intent,
         });
+        return;
       }
+
+      const plan = await this.subscriptionRepo.findPlanById(planId);
+      if (!plan) {
+        throw new Error(`Plan not found: ${planId}`);
+      }
+
+      // Calculate subscription period based on plan
+      const now = new Date();
+      let currentPeriodEnd = new Date();
+      
+      if (plan.interval === 'month') {
+        currentPeriodEnd.setMonth(now.getMonth() + (plan.intervalCount || 1));
+      } else if (plan.interval === 'year') {
+        currentPeriodEnd.setFullYear(now.getFullYear() + (plan.intervalCount || 1));
+      } else {
+        // Default to 1 month
+        currentPeriodEnd.setMonth(now.getMonth() + 1);
+      }
+
+      // Create subscription in database (INTERNAL subscription management)
+      const subscription = await this.subscriptionRepo.createSubscription({
+        userId: BigInt(userId),
+        planId: planId,
+        stripeSubscriptionId: null, // We're not using Stripe subscriptions
+        stripeCustomerId: session.customer,
+        currentPeriodStart: now,
+        currentPeriodEnd: currentPeriodEnd,
+        status: 'ACTIVE',
+        cancelAtPeriodEnd: false,
+      });
+
+      // Update user subscription type
+      await this.userRepo.updateUserSubscriptionType(BigInt(userId), 'premium');
+
+      // Update transaction status
+      await this.subscriptionRepo.updateTransactionByCheckoutSession(session.id, {
+        status: 'SUCCEEDED',
+        subscriptionId: subscription.id,
+        stripePaymentIntentId: session.payment_intent,
+      });
+
+      console.log(`Subscription created for user ${userId} via webhook`);
+
+    } catch (error) {
+      console.error('Error handling checkout session completed:', error);
+      // Still update transaction to failed status
+      await this.subscriptionRepo.updateTransactionByCheckoutSession(session.id, {
+        status: 'FAILED',
+      });
+      throw error;
     }
   }
 
-  async handleSubscriptionDeleted(stripeSubscription) {
-    const subscription = await this.subscriptionRepo.findSubscriptionByStripeId(stripeSubscription.id);
-    
-    if (subscription) {
-      await this.subscriptionRepo.updateSubscription(subscription.id, {
-        status: 'CANCELED',
+  async handlePaymentIntentSucceeded(paymentIntent) {
+    try {
+      // Find transaction by payment intent
+      const transaction = await this.subscriptionRepo.findTransactionByStripePaymentIntent(paymentIntent.id);
+      
+      if (!transaction) {
+        console.warn('No transaction found for payment intent:', paymentIntent.id);
+        return;
+      }
+
+      // If transaction is already processed, skip
+      if (transaction.status === 'SUCCEEDED') {
+        return;
+      }
+
+      // Update transaction status
+      await this.subscriptionRepo.updateTransaction(transaction.id, {
+        status: 'SUCCEEDED',
       });
 
-      // Downgrade user to free
-      await this.userRepo.update(subscription.userId, {
-        subscriptionType: 'free',
-      });
+      console.log(`Payment succeeded for transaction: ${transaction.id}`);
+
+    } catch (error) {
+      console.error('Error handling payment intent succeeded:', error);
     }
   }
 
-  async checkAndHandleFailedPayments(userId) {
-    // Implement logic to handle multiple failed payments
-    // This could involve downgrading the user after a certain number of failures
-    const recentFailedTransactions = await this.subscriptionRepo.getUserTransactions(userId, {
-      status: 'FAILED',
-      limit: 3, // Check last 3 transactions
-    });
-
-    if (recentFailedTransactions.transactions.length >= 3) {
-      // Cancel subscription and downgrade user
-      const activeSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(userId);
-      if (activeSubscription) {
-        await this.stripeService.cancelSubscription(activeSubscription.stripeSubscriptionId);
-        await this.userRepo.update(userId, { subscriptionType: 'free' });
+  async handlePaymentIntentFailed(paymentIntent) {
+    try {
+      const transaction = await this.subscriptionRepo.findTransactionByStripePaymentIntent(paymentIntent.id);
+      
+      if (transaction) {
+        await this.subscriptionRepo.updateTransaction(transaction.id, {
+          status: 'FAILED',
+        });
+        console.log(`Payment failed for transaction: ${transaction.id}`);
       }
+    } catch (error) {
+      console.error('Error handling payment intent failed:', error);
     }
   }
 
@@ -193,14 +351,14 @@ export class SubscriptionUseCases {
       throw new Error('No active subscription found');
     }
 
-    // Cancel in Stripe
-    await this.stripeService.cancelSubscription(activeSubscription.stripeSubscriptionId);
-
-    // Update in database
+    // Update in database (INTERNAL cancellation)
     await this.subscriptionRepo.updateSubscription(activeSubscription.id, {
       status: 'CANCELED',
       cancelAtPeriodEnd: true,
     });
+
+    // Downgrade user
+    await this.userRepo.updateUserSubscriptionType(userId, 'free');
 
     return { message: 'Subscription cancelled successfully' };
   }
@@ -242,33 +400,17 @@ export class SubscriptionUseCases {
     
     return true;
   }
-  
+
+  // Admin methods remain the same...
   async createPlan(planData) {
     try {
       const { name, price, interval, intervalCount = 1, trialDays, currency = 'usd' } = planData;
 
-      // Validate required fields
       if (!name || !price || !interval) {
         throw new Error('Name, price, and interval are required');
       }
 
-      // Create price in Stripe
-      const stripePrice = await this.stripeService.stripe.prices.create({
-        unit_amount: Math.round(price * 100), // Convert to cents
-        currency: currency.toLowerCase(),
-        recurring: {
-          interval: interval.toLowerCase(),
-          interval_count: intervalCount,
-        },
-        product_data: {
-          name: name,
-          metadata: {
-            type: 'subscription'
-          }
-        },
-      });
-
-      // Create plan in database
+      // Create plan in database only (no Stripe price creation)
       const plan = await this.subscriptionRepo.createPlan({
         name,
         price,
@@ -276,7 +418,7 @@ export class SubscriptionUseCases {
         interval: interval.toLowerCase(),
         intervalCount,
         trialDays,
-        stripePriceId: stripePrice.id,
+        stripePriceId: null, // We're not using Stripe prices
         visible: true,
       });
 
@@ -286,7 +428,6 @@ export class SubscriptionUseCases {
     }
   }
 
-  // Admin: Update subscription plan
   async updatePlan(planId, planData) {
     try {
       const plan = await this.subscriptionRepo.findPlanById(planId);
@@ -294,17 +435,13 @@ export class SubscriptionUseCases {
         throw new Error('Subscription plan not found');
       }
 
-      // Don't allow updating Stripe price ID
-      const { stripePriceId, ...updateData } = planData;
-
-      const updatedPlan = await this.subscriptionRepo.updatePlan(planId, updateData);
+      const updatedPlan = await this.subscriptionRepo.updatePlan(planId, planData);
       return updatedPlan;
     } catch (error) {
       throw new Error(`Failed to update subscription plan: ${error.message}`);
     }
   }
 
-  // Admin: Toggle plan visibility
   async togglePlanVisibility(planId) {
     try {
       const plan = await this.subscriptionRepo.findPlanById(planId);
@@ -322,7 +459,6 @@ export class SubscriptionUseCases {
     }
   }
 
-  // Admin: Get all subscriptions with pagination and filters
   async getSubscriptions(filters = {}) {
     try {
       const {
@@ -350,7 +486,6 @@ export class SubscriptionUseCases {
     }
   }
 
-  // Admin: Get subscription by ID
   async getSubscriptionById(subscriptionId) {
     try {
       const subscription = await this.subscriptionRepo.findSubscriptionById(subscriptionId);
@@ -364,7 +499,6 @@ export class SubscriptionUseCases {
     }
   }
 
-  // Admin: Cancel subscription
   async adminCancelSubscription(subscriptionId) {
     try {
       const subscription = await this.subscriptionRepo.findSubscriptionById(subscriptionId);
@@ -372,21 +506,14 @@ export class SubscriptionUseCases {
         throw new Error('Subscription not found');
       }
 
-      // Cancel in Stripe
-      if (subscription.stripeSubscriptionId) {
-        await this.stripeService.cancelSubscription(subscription.stripeSubscriptionId);
-      }
-
-      // Update in database
+      // Update in database only (internal cancellation)
       const updatedSubscription = await this.subscriptionRepo.updateSubscription(subscriptionId, {
         status: 'CANCELED',
         cancelAtPeriodEnd: true,
       });
 
       // Downgrade user
-      await this.userRepo.update(subscription.userId, {
-        subscriptionType: 'free',
-      });
+      await this.userRepo.updateUserSubscriptionType(subscription.userId, 'free');
 
       return updatedSubscription;
     } catch (error) {
@@ -394,7 +521,6 @@ export class SubscriptionUseCases {
     }
   }
 
-  // Admin: Get all transactions with pagination
   async getAdminTransactions(filters = {}) {
     try {
       const {

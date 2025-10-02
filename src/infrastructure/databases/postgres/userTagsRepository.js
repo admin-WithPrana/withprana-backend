@@ -111,4 +111,18 @@ export class userTagsRepository {
             return false;
         }
     }
+
+    async updateUserSubscriptionType(userId, subscriptionType) {
+        return await this.prisma.user.update({
+          where: { id: BigInt(userId) },
+          data: { subscriptionType }
+        });
+      }
+    
+      async update(userId, data) {
+        return await this.prisma.user.update({
+          where: { id: BigInt(userId) },
+          data
+        });
+      }
 }

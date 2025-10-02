@@ -25,22 +25,40 @@ export class SubscriptionController {
     }
   }
 
-  async handleWebhook(request, reply) {
+  async createAppCheckoutSession(request, reply) {
     try {
-      const signature = request.headers["stripe-signature"];
-      const payload = request.rawBody;
+      const { planId } = request.body;
+      const userId = request.user.id;
 
-      await this.subscriptionUseCases.handleWebhookEvent(payload, signature);
+      const result = await this.subscriptionUseCases.createAppSubscriptionCheckout(
+        userId,
+        planId
+      );
 
-      return reply.code(200).send({ received: true });
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
     } catch (error) {
-      console.error("Webhook error:", error);
       return reply.code(400).send({
         success: false,
         message: error.message,
       });
     }
   }
+
+  async handleWebhook(event) {
+    try {
+      console.log(event)
+      await this.subscriptionUseCases.handleWebhookEvent(event);
+  
+      return { received: true };
+    } catch (error) {
+      console.error('Webhook error:', error);
+      throw error;
+    }
+  }
+  
 
   async getSubscriptionStatus(request, reply) {
     try {
