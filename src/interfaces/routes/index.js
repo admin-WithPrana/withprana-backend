@@ -12,6 +12,7 @@ import { policyRoutes } from "./privacyPolicyRoutes.js";
 import { onboardingRoutes } from "./onBoardingRoutes.js";
 import {userTagsRoutes} from "./userTagRoutes.js"
 import {setupSubscriptionRoutes}  from "./subscriptionRoutes.js"
+import {settingsRoutes} from './settingsRoute.js'
 
 export async function registerRoutes(app, deps) {
   app.register(
@@ -165,5 +166,14 @@ export async function registerRoutes(app, deps) {
       });
     },
     { prefix: "/api/subscriptions" }
+  );
+
+   app.register(
+    async function (settingsScope) {
+      settingsRoutes(settingsScope, {
+        prismaRepository: deps.prismaRepository,
+      });
+    },
+    { prefix: "/api/settings" }
   );
 }

@@ -329,6 +329,17 @@ model Transaction {
   @@map("transactions")
 }
 
+model Settings {
+  id             String   @id @default(uuid())
+  tagline        String
+  currentVersion String
+  supportEmail   String   @unique
+  releaseNote    String?
+  adminEmail     String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 enum SubscriptionStatus {
   ACTIVE
   CANCELED
