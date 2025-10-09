@@ -6,7 +6,6 @@ import { CategoryRepository } from "../../infrastructure/databases/postgres/cate
 import { CategoryUsecase } from "../../domain/usecases/categoryUsecase.js";
 import { CategoryController } from "../controllers/categoryController.js";
 import fastifyMultipart from "@fastify/multipart";
-import {uploadToCloudinary  } from "../../infrastructure/services/cloudinaryService.js"
 import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,13 +32,16 @@ export const categoryRoutes = async (app, { prismaRepository }) => {
     let iconUrl = null;
 
     if (backgroundImage?.file) {
-      backgroundImageUrl = await uploadToS3(backgroundImage?.file?.path,"backgroundImage")
+      let image = await uploadToS3(backgroundImage,"images")
+      backgroundImageUrl=image[0]
+      console.log(image)
     } else if (typeof backgroundImage === "string" && backgroundImage.trim() !== "") {
       backgroundImageUrl = backgroundImage;
     }
 
     if (icon?.file) {
-      iconUrl =await uploadToS3(icon?.file?.path,"icon")
+      let image=await uploadToS3(icon,"images")
+      iconUrl =image[0]
     } else if (typeof icon === "string" && icon.trim() !== "") {
       iconUrl = icon;
     }

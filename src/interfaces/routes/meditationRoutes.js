@@ -2,7 +2,6 @@ import { MeditationRepository } from '../../infrastructure/databases/postgres/me
 import { MeditationUsecase } from '../../domain/usecases/meditationUsecase.js';
 import { MeditationController } from '../controllers/meditationController.js';
 import fastifyMultipart from '@fastify/multipart';
-import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
 import { authMiddleware } from '../../infrastructure/services/middleware.js';
 import { uploadToS3 } from '../../infrastructure/services/uploadToS3.js';
 import { convertToHLS, removeFolder } from '../../infrastructure/services/convertToHLS.js';
@@ -115,6 +114,7 @@ export const meditationRoutes = async (app, { prismaRepository,meditationQueue }
   });
 
   app.patch('/:id', async (req, reply) => {
+     let audioDir=''
   try {
     const { id } = req.params;   // <-- get id from params
 
@@ -128,13 +128,18 @@ export const meditationRoutes = async (app, { prismaRepository,meditationQueue }
     let thumbnailUrl = null;
 
     if (audioFile?.file) {
-      audioFileUrl = await uploadToCloudinary(audioFile, 'meditations/audio');
+      const buffer = await audioFile.toBuffer(); 
+       const { outputDir, manifestPath } = await convertToHLS(buffer);
+       audioDir=outputDir
+      
+      const audio=await uploadToS3(outputDir, `audio/${title?.value}-${Date.now()}`);
+      audioFileUrl=audio[0]
     } else if (typeof audioFile === 'string' && audioFile.trim() !== '') {
       audioFileUrl = audioFile;
     }
 
     if (thumbnail?.file) {
-      thumbnailUrl = await uploadToCloudinary(thumbnail, 'meditations/thumbnails');
+       thumbnailUrl = await uploadToS3(thumbnail,"images")
     } else if (typeof thumbnail === 'string' && thumbnail.trim() !== '') {
       thumbnailUrl = thumbnail;
     }
@@ -147,7 +152,7 @@ export const meditationRoutes = async (app, { prismaRepository,meditationQueue }
       ...(subcategoryId !== undefined && { subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId }),
       ...(type !== undefined && { type: typeof type === 'object' ? type.value : type }),
       ...(audioFileUrl && { link: audioFileUrl }),
-      ...(thumbnailUrl && { thumbnail: thumbnailUrl }),
+      ...(thumbnailUrl && { thumbnail: thumbnailUrl[0] }),
       ...(isPremium !== undefined && { 
         isPremium: typeof isPremium === 'object' ? isPremium.value === 'true' : Boolean(isPremium)
       }),
@@ -164,7 +169,9 @@ export const meditationRoutes = async (app, { prismaRepository,meditationQueue }
       error: 'Failed to update meditation', 
       details: error.message 
     });
-  }
+  }finally{
+      removeFolder(audioDir)
+    }
 });
 
 
