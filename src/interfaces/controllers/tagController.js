@@ -26,4 +26,6 @@ export class TagController {
             reply.status(500).send({ message: err.message });
         }
     }
+
+      
 }

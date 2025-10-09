@@ -1,6 +1,7 @@
 export class MeditationUsecase {
-  constructor(meditationRepository) {
+  constructor(meditationRepository,meditationQueue) {
     this.meditationRepository = meditationRepository;
+    this.meditationQueue=meditationQueue
   }
 
   async createMeditation({ 
@@ -14,10 +15,10 @@ export class MeditationUsecase {
     categoryId, 
     subcategoryId = null,
     type,
-    tags
+    tags,
+    scheduledAt
   }) {
-    console.log(tags)
-    return this.meditationRepository.create({ 
+    const meditation=await this.meditationRepository.create({ 
       title, 
       description, 
       duration: Number(duration), 
@@ -28,8 +29,24 @@ export class MeditationUsecase {
       categoryId: categoryId, 
       subcategoryId,
       type:type,
-      tags:tags
+      tags:tags,
+      scheduledAt
     });
+
+    if(meditation.scheduledAt){
+    await this.meditationQueue.add(
+      'meditationQueue',
+      { meditationId: meditation.id },
+      {
+        delay: new Date(meditation.scheduledAt).getTime() - Date.now(),
+        attempts: 3, // retry if job fails
+        removeOnComplete: true,
+        removeOnFail: false
+      }
+    );
+    }
+
+    return meditation
   }
 
   async getMeditationById(id) {
@@ -52,6 +69,13 @@ export class MeditationUsecase {
 
   async getAllMeditations(limit,page,sort,order) {
     return this.meditationRepository.findAll(limit,page,sort,order);
+  }
+
+  async getMeditationsByUserSelectedTags(userId, limit, page, sort, order) {
+    if (!userId) {
+      throw new Error('User authentication required');
+    }
+    return this.meditationRepository.findByUserSelectedTags(userId, limit, page, sort, order);
   }
 
   async updateMeditation(id, data) {

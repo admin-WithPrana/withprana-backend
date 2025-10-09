@@ -11,11 +11,12 @@ export class PolicyUsecase {
     
       const existingPolicy = await this.repo.findByType(Number(data?.type));
       if (existingPolicy) {
-        await this.repo.update(data.type,data)
+        return await this.repo.update(data.type,data)
       }
       
       return await this.repo.create(data);
     } catch (err) {
+      console.log(err.message)
       throw new Error(`Usecase Error (createPolicy): ${err.message}`);
     }
   }

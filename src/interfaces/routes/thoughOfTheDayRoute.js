@@ -2,11 +2,12 @@ import fastifyMultipart from '@fastify/multipart';
 import { ThoughtOfTheDayUsecase } from '../../domain/usecases/thoughOfTheDayUsecase.js';
 import { ThoughtOfTheDayRepository } from '../../infrastructure/databases/postgres/thoughOfTheDayRepository.js';
 import { ThoughtOfTheDayController } from '../controllers/thoughOfTheDayController.js';
-import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
+import { convertToHLS, removeFolder } from '../../infrastructure/services/convertToHLS.js';
+import { uploadToS3 } from '../../infrastructure/services/uploadToS3.js';
 
-export const thoughtRoutes = (app, { prismaRepository,postQueue }) => {
+export const thoughtRoutes = (app, { prismaRepository,thoughtQueue }) => {
   const thoughtRepository = new ThoughtOfTheDayRepository(prismaRepository.prisma);
-  const thoughtUsecase = new ThoughtOfTheDayUsecase(thoughtRepository,postQueue);
+  const thoughtUsecase = new ThoughtOfTheDayUsecase(thoughtRepository,thoughtQueue);
   const thoughtController = new ThoughtOfTheDayController(thoughtUsecase);
 
   app.register(fastifyMultipart, {
@@ -18,6 +19,7 @@ export const thoughtRoutes = (app, { prismaRepository,postQueue }) => {
 });
 
 app.post('/', async (req, reply) => {
+   let audioDir=''
   try {
     const {
       title,
@@ -35,13 +37,19 @@ app.post('/', async (req, reply) => {
     let linkUrl = null;
 
     if (thumbnail?.file) {
-      thumbnailUrl = await uploadToCloudinary(thumbnail, 'thoughts/thumbnails');
+      let image= await uploadToS3(thumbnail,"images")
+    thumbnailUrl=image[0]
     } else if (typeof thumbnail === 'string') {
       thumbnailUrl = thumbnail;
     }
 
     if (link?.file) {
-      linkUrl = await uploadToCloudinary(link, 'thoughts/audio');
+      const buffer = await link.toBuffer(); 
+      const { outputDir, manifestPath } = await convertToHLS(buffer);
+      audioDir=outputDir
+            
+      const audio=await uploadToS3(outputDir, `audio/${title?.value}-${Date.now()}`);
+      linkUrl=audio[0]
     } else if (typeof link === 'string') {
       linkUrl = link;
     }
@@ -75,6 +83,8 @@ app.post('/', async (req, reply) => {
       error: 'Failed to create thought',
       details: error.message,
     });
+  }finally{
+        removeFolder(audioDir)
   }
 });
 

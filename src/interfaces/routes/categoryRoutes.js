@@ -6,7 +6,7 @@ import { CategoryRepository } from "../../infrastructure/databases/postgres/cate
 import { CategoryUsecase } from "../../domain/usecases/categoryUsecase.js";
 import { CategoryController } from "../controllers/categoryController.js";
 import fastifyMultipart from "@fastify/multipart";
-import {uploadToCloudinary  } from "../../infrastructure/services/cloudinaryService.js"
+import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,16 +32,16 @@ export const categoryRoutes = async (app, { prismaRepository }) => {
     let iconUrl = null;
 
     if (backgroundImage?.file) {
-      backgroundImageUrl = await uploadToCloudinary(
-        backgroundImage,
-        "categories/backgrounds"
-      );
+      let image = await uploadToS3(backgroundImage,"images")
+      backgroundImageUrl=image[0]
+      console.log(image)
     } else if (typeof backgroundImage === "string" && backgroundImage.trim() !== "") {
       backgroundImageUrl = backgroundImage;
     }
 
     if (icon?.file) {
-      iconUrl = await uploadToCloudinary(icon, "categories/icons");
+      let image=await uploadToS3(icon,"images")
+      iconUrl =image[0]
     } else if (typeof icon === "string" && icon.trim() !== "") {
       iconUrl = icon;
     }
@@ -53,6 +53,8 @@ export const categoryRoutes = async (app, { prismaRepository }) => {
       color:typeof color === "object" ? color.value : color,
     };
 
+
+    console.log(payload)
     await controller.create({ ...req, body: payload }, reply);
   } catch (error) {
     console.error("Form data processing error:", error);

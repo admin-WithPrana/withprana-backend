@@ -10,6 +10,9 @@ import { thoughtRoutes } from "./thoughOfTheDayRoute.js";
 import { playlistRoutes } from "./playListRoutes.js";
 import { policyRoutes } from "./privacyPolicyRoutes.js";
 import { onboardingRoutes } from "./onBoardingRoutes.js";
+import {userTagsRoutes} from "./userTagRoutes.js"
+import {setupSubscriptionRoutes}  from "./subscriptionRoutes.js"
+import {settingsRoutes} from './settingsRoute.js'
 
 export async function registerRoutes(app, deps) {
   app.register(
@@ -55,6 +58,7 @@ export async function registerRoutes(app, deps) {
       meditationRoutes(meditationScope, {
         prismaRepository: deps.prismaRepository,
         mongoRepository: deps.mongoRepository,
+        meditationQueue:deps.meditationQueue
       });
     },
     { prefix: "/api/meditation" }
@@ -91,7 +95,7 @@ export async function registerRoutes(app, deps) {
     async function (thoughtScope) {
       thoughtRoutes(thoughtScope, {
         prismaRepository: deps.prismaRepository,
-        postQueue: deps.postQueue,
+        thoughtQueue: deps.thoughtQueue,
       });
     },
     { prefix: "/api/thought" }
@@ -125,5 +129,52 @@ export async function registerRoutes(app, deps) {
       });
     },
     { prefix: "/api/onboard" }
+  );
+
+  app.register(
+    async function (tagsScope) {
+      userTagsRoutes(tagsScope, {
+        prismaRepository: deps.prismaRepository,
+      });
+    },
+    { prefix: "/api/usertags" }
+  );
+
+  // app.register(
+  //   async function (tagsScope) {
+  //     setupSubscriptionRoutes(tagsScope, {
+  //       prismaRepository: deps.prismaRepository,
+  //     });
+  //   },
+  //   { prefix: "/api/subscriptions" }
+  // );
+  app.register(
+    async function (subscriptionScope) {
+      const userRepository = deps.userRepository || {
+        findById: (id) => deps.prismaRepository.prisma.user.findUnique({ 
+          where: { id: BigInt(id) } 
+        }),
+        updateUserStripeCustomerId: (userId, stripeCustomerId) => 
+          deps.prismaRepository.prisma.user.update({
+            where: { id: BigInt(userId) },
+            data: { stripeCustomerId }
+          }),
+      };
+  
+      setupSubscriptionRoutes(subscriptionScope, {
+        prismaRepository: deps.prismaRepository,
+        userRepository: userRepository,
+      });
+    },
+    { prefix: "/api/subscriptions" }
+  );
+
+   app.register(
+    async function (settingsScope) {
+      settingsRoutes(settingsScope, {
+        prismaRepository: deps.prismaRepository,
+      });
+    },
+    { prefix: "/api/settings" }
   );
 }
