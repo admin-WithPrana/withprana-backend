@@ -2,7 +2,7 @@ import fastifyMultipart from '@fastify/multipart';
 import { ThoughtOfTheDayUsecase } from '../../domain/usecases/thoughOfTheDayUsecase.js';
 import { ThoughtOfTheDayRepository } from '../../infrastructure/databases/postgres/thoughOfTheDayRepository.js';
 import { ThoughtOfTheDayController } from '../controllers/thoughOfTheDayController.js';
-import { removeFolder } from '../../infrastructure/services/convertToHLS.js';
+import { convertToHLS, removeFolder } from '../../infrastructure/services/convertToHLS.js';
 import { uploadToS3 } from '../../infrastructure/services/uploadToS3.js';
 
 export const thoughtRoutes = (app, { prismaRepository,thoughtQueue }) => {
@@ -44,7 +44,7 @@ app.post('/', async (req, reply) => {
     }
 
     if (link?.file) {
-      const buffer = await audioFile.toBuffer(); 
+      const buffer = await link.toBuffer(); 
       const { outputDir, manifestPath } = await convertToHLS(buffer);
       audioDir=outputDir
             
