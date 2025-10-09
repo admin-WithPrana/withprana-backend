@@ -5,6 +5,7 @@ export class MeditationController {
 
   async createMeditation(meditationData) {
     try {
+      console.log("data",meditationData)
       const meditation = await this.meditationUsecase.createMeditation(meditationData);
       return meditation;
     } catch (err) {
@@ -14,7 +15,7 @@ export class MeditationController {
 
   async create(req, reply) {
     try {
-      const { title, description, duration, link, thumbnail, isPremium, categoryId, subcategoryId,type,tags} = req.body;
+      const { title, description, duration, link, thumbnail, isPremium, categoryId, subcategoryId,type,tags,scheduledAt,active} = req.body;
       const file = req.file;
 
       const meditationData = {
@@ -28,7 +29,9 @@ export class MeditationController {
         subcategoryId: subcategoryId || null,
         subcategoryId,
         type,
-        tags
+        tags,
+        scheduledAt,
+        active
       };
 
       const meditation = await this.meditationUsecase.createMeditation(meditationData);

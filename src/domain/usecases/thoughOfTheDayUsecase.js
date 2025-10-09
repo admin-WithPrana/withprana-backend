@@ -19,7 +19,6 @@ export class ThoughtOfTheDayUsecase {
         scheduleNow
       } = data;
 
-      console.log(data)
 
       if (!title || !description || !duration || !link) {
         throw new Error('All fields are required');

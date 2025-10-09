@@ -2,12 +2,13 @@ import { MeditationRepository } from '../../infrastructure/databases/postgres/me
 import { MeditationUsecase } from '../../domain/usecases/meditationUsecase.js';
 import { MeditationController } from '../controllers/meditationController.js';
 import fastifyMultipart from '@fastify/multipart';
-import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
 import { authMiddleware } from '../../infrastructure/services/middleware.js';
+import { uploadToS3 } from '../../infrastructure/services/uploadToS3.js';
+import { convertToHLS, removeFolder } from '../../infrastructure/services/convertToHLS.js';
 
-export const meditationRoutes = async (app, { prismaRepository }) => {
+export const meditationRoutes = async (app, { prismaRepository,meditationQueue }) => {
   const repo = new MeditationRepository(prismaRepository.prisma);
-  const usecase = new MeditationUsecase(repo);
+  const usecase = new MeditationUsecase(repo,meditationQueue);
   const controller = new MeditationController(usecase);
 
   app.register(fastifyMultipart, {
@@ -19,17 +20,21 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
   });
 
   app.post('/', async (req, reply) => {
+    let audioDir=''
     try {
-      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type,tags} = req.body;
+      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type,tags,schedule} = req.body;
+      console.log(schedule.value)
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
 
-      if (audioFile?.file) {
-        audioFileUrl = await uploadToCloudinary(
-          audioFile,
-          'meditations/audio'
-        );
+     if (audioFile?.file) {
+       const buffer = await audioFile.toBuffer(); 
+       const { outputDir, manifestPath } = await convertToHLS(buffer);
+       audioDir=outputDir
+      
+      const audio=await uploadToS3(outputDir, `audio/${title?.value}-${Date.now()}`);
+      audioFileUrl=audio[0]
       } else if (typeof audioFile === 'string' && audioFile.trim() !== '') {
         audioFileUrl = audioFile;
       }
@@ -42,10 +47,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
       }
 
       if (thumbnail?.file) {
-        thumbnailUrl = await uploadToCloudinary(
-          thumbnail,
-          'meditations/thumbnails'
-        );
+        thumbnailUrl = await uploadToS3(thumbnail,"images")
       } else if (typeof thumbnail === 'string' && thumbnail.trim() !== '') {
         thumbnailUrl = thumbnail;
       }
@@ -82,34 +84,37 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
       console.log('⚠️ No tags provided or tags is null/undefined');
     }
 
-    console.log(parsedTags)
-
       const payload = {
         title: typeof title === 'object' ? title.value : title,
         description: typeof description === 'object' ? description.value : description,
         duration: typeof duration === 'object' ? parseInt(duration.value) : parseInt(duration),
         categoryId: typeof categoryId === 'object' ? categoryId.value : categoryId,
         link: audioFileUrl, 
-        thumbnail: thumbnailUrl,
+        thumbnail: thumbnailUrl ? thumbnailUrl[0] : '',
         isPremium: typeof isPremium === 'object' ? isPremium.value === 'true' : Boolean(isPremium),
         active: typeof active === 'object' ? active.value === 'true' : Boolean(active),
         subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId,
         type:typeof type === 'object' ? type.value : type,
-        tags:parsedTags.tags
+        tags:parsedTags.tags,
+        scheduledAt: schedule?.value ? new Date(schedule?.value) : null,
+        active: schedule?.value ? false : true,
       };
-
       await controller.create({ ...req, body: payload }, reply);
 
     } catch (error) {
+      
       console.error('Meditation creation error:', error);
       reply.status(500).send({ 
         error: 'Failed to create meditation', 
         details: error.message 
       });
+    }finally{
+      removeFolder(audioDir)
     }
   });
 
   app.patch('/:id', async (req, reply) => {
+     let audioDir=''
   try {
     const { id } = req.params;   // <-- get id from params
 
@@ -123,13 +128,18 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
     let thumbnailUrl = null;
 
     if (audioFile?.file) {
-      audioFileUrl = await uploadToCloudinary(audioFile, 'meditations/audio');
+      const buffer = await audioFile.toBuffer(); 
+       const { outputDir, manifestPath } = await convertToHLS(buffer);
+       audioDir=outputDir
+      
+      const audio=await uploadToS3(outputDir, `audio/${title?.value}-${Date.now()}`);
+      audioFileUrl=audio[0]
     } else if (typeof audioFile === 'string' && audioFile.trim() !== '') {
       audioFileUrl = audioFile;
     }
 
     if (thumbnail?.file) {
-      thumbnailUrl = await uploadToCloudinary(thumbnail, 'meditations/thumbnails');
+       thumbnailUrl = await uploadToS3(thumbnail,"images")
     } else if (typeof thumbnail === 'string' && thumbnail.trim() !== '') {
       thumbnailUrl = thumbnail;
     }
@@ -142,7 +152,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
       ...(subcategoryId !== undefined && { subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId }),
       ...(type !== undefined && { type: typeof type === 'object' ? type.value : type }),
       ...(audioFileUrl && { link: audioFileUrl }),
-      ...(thumbnailUrl && { thumbnail: thumbnailUrl }),
+      ...(thumbnailUrl && { thumbnail: thumbnailUrl[0] }),
       ...(isPremium !== undefined && { 
         isPremium: typeof isPremium === 'object' ? isPremium.value === 'true' : Boolean(isPremium)
       }),
@@ -159,7 +169,9 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
       error: 'Failed to update meditation', 
       details: error.message 
     });
-  }
+  }finally{
+      removeFolder(audioDir)
+    }
 });
 
 

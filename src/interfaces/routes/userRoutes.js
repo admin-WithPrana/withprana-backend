@@ -2,7 +2,6 @@ import { UserController } from '../controllers/userController.js';
 import { PostgresOTPRepository } from '../../infrastructure/databases/postgres/otpRepository.js';
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 import fastifyMultipart from '@fastify/multipart';
-import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
@@ -37,10 +36,8 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
     }
     
     if (profilePicture?.file) {
-      profilePictureUrl = await uploadToCloudinary(
-        profilePicture,
-        'users/profile-pictures'
-      );
+      let image=uploadToS3(profilePicture,"images")
+      profilePictureUrl=image[0]
     }
 
     const payload = {
@@ -78,10 +75,9 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
 
       if (profilePicture) {
         if (profilePicture?.file) {
-          profilePictureUrl = await uploadToCloudinary(
-            profilePicture,
-            'users/profile-pictures'
-          );
+
+          let image=uploadToS3(profilePicture,"images")
+          profilePictureUrl=image[0]
         } else if (typeof profilePicture === 'string' && profilePicture.trim() !== '') {
           profilePictureUrl = profilePicture;
         }
