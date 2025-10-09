@@ -19,6 +19,7 @@ const s3 = new S3Client({
  * @returns {Promise<string[]>} - uploaded S3 URLs
  */
 export async function uploadToS3(source, destinationFolder = "audio") {
+  try{
   const uploadedUrls = [];
 
   const getContentType = (ext) => {
@@ -89,4 +90,8 @@ export async function uploadToS3(source, destinationFolder = "audio") {
   }
 
   return uploadedUrls;
+}catch(error){
+  console.log(error)
+  return []
+}
 }

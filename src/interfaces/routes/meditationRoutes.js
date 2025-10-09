@@ -29,11 +29,11 @@ export const meditationRoutes = async (app, { prismaRepository,meditationQueue }
       let audioFileUrl = null;
       let thumbnailUrl = null;
 
-      if (audioFile?.file) {
+     if (audioFile?.file) {
        const buffer = await audioFile.toBuffer(); 
        const { outputDir, manifestPath } = await convertToHLS(buffer);
        audioDir=outputDir
-
+      
       const audio=await uploadToS3(outputDir, `audio/${title?.value}-${Date.now()}`);
       audioFileUrl=audio[0]
       } else if (typeof audioFile === 'string' && audioFile.trim() !== '') {
@@ -91,14 +91,14 @@ export const meditationRoutes = async (app, { prismaRepository,meditationQueue }
         duration: typeof duration === 'object' ? parseInt(duration.value) : parseInt(duration),
         categoryId: typeof categoryId === 'object' ? categoryId.value : categoryId,
         link: audioFileUrl, 
-        thumbnail: thumbnailUrl[0],
+        thumbnail: thumbnailUrl ? thumbnailUrl[0] : '',
         isPremium: typeof isPremium === 'object' ? isPremium.value === 'true' : Boolean(isPremium),
         active: typeof active === 'object' ? active.value === 'true' : Boolean(active),
         subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId,
         type:typeof type === 'object' ? type.value : type,
         tags:parsedTags.tags,
         scheduledAt: schedule?.value ? new Date(schedule?.value) : null,
-        active: schedule?.value ? false : (typeof active === 'object' ? active.value === 'true' : Boolean(active)),
+        active: schedule?.value ? false : true,
       };
       await controller.create({ ...req, body: payload }, reply);
 
