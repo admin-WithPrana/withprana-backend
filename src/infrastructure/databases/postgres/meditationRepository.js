@@ -432,6 +432,7 @@ export class MeditationRepository {
         thumbnail: data.thumbnail,
         isPremium: data.isPremium,
         type: data?.type,
+        scheduledAt:data?.scheduledAt,
         active: data.active !== undefined ? data.active : true,
         category: {
           connect: { id: Number(data.categoryId) }

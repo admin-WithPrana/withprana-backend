@@ -4,9 +4,9 @@ import { ThoughtOfTheDayRepository } from '../../infrastructure/databases/postgr
 import { ThoughtOfTheDayController } from '../controllers/thoughOfTheDayController.js';
 import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
 
-export const thoughtRoutes = (app, { prismaRepository,postQueue }) => {
+export const thoughtRoutes = (app, { prismaRepository,thoughtQueue }) => {
   const thoughtRepository = new ThoughtOfTheDayRepository(prismaRepository.prisma);
-  const thoughtUsecase = new ThoughtOfTheDayUsecase(thoughtRepository,postQueue);
+  const thoughtUsecase = new ThoughtOfTheDayUsecase(thoughtRepository,thoughtQueue);
   const thoughtController = new ThoughtOfTheDayController(thoughtUsecase);
 
   app.register(fastifyMultipart, {

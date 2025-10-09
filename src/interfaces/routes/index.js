@@ -58,6 +58,7 @@ export async function registerRoutes(app, deps) {
       meditationRoutes(meditationScope, {
         prismaRepository: deps.prismaRepository,
         mongoRepository: deps.mongoRepository,
+        meditationQueue:deps.meditationQueue
       });
     },
     { prefix: "/api/meditation" }
@@ -94,7 +95,7 @@ export async function registerRoutes(app, deps) {
     async function (thoughtScope) {
       thoughtRoutes(thoughtScope, {
         prismaRepository: deps.prismaRepository,
-        postQueue: deps.postQueue,
+        thoughtQueue: deps.thoughtQueue,
       });
     },
     { prefix: "/api/thought" }

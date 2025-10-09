@@ -7,9 +7,9 @@ import { authMiddleware } from '../../infrastructure/services/middleware.js';
 import { uploadToS3 } from '../../infrastructure/services/uploadToS3.js';
 import { convertToHLS, removeFolder } from '../../infrastructure/services/convertToHLS.js';
 
-export const meditationRoutes = async (app, { prismaRepository }) => {
+export const meditationRoutes = async (app, { prismaRepository,meditationQueue }) => {
   const repo = new MeditationRepository(prismaRepository.prisma);
-  const usecase = new MeditationUsecase(repo);
+  const usecase = new MeditationUsecase(repo,meditationQueue);
   const controller = new MeditationController(usecase);
 
   app.register(fastifyMultipart, {
@@ -23,7 +23,8 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
   app.post('/', async (req, reply) => {
     let audioDir=''
     try {
-      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type,tags} = req.body;
+      const { title, description, duration, categoryId, audioFile, thumbnail, isPremium, active,subcategoryId,type,tags,schedule} = req.body;
+      console.log(schedule.value)
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
@@ -95,9 +96,10 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
         active: typeof active === 'object' ? active.value === 'true' : Boolean(active),
         subcategoryId: typeof subcategoryId === 'object' ? subcategoryId.value : subcategoryId,
         type:typeof type === 'object' ? type.value : type,
-        tags:parsedTags.tags
+        tags:parsedTags.tags,
+        scheduledAt: schedule?.value ? new Date(schedule?.value) : null,
+        active: schedule?.value ? false : (typeof active === 'object' ? active.value === 'true' : Boolean(active)),
       };
-
       await controller.create({ ...req, body: payload }, reply);
 
     } catch (error) {
@@ -108,7 +110,7 @@ export const meditationRoutes = async (app, { prismaRepository }) => {
         details: error.message 
       });
     }finally{
-      removeFolder(outputDir)
+      removeFolder(audioDir)
     }
   });
 

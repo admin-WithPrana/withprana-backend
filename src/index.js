@@ -5,8 +5,8 @@ import fastifyMultipart from '@fastify/multipart';
 import { registerRoutes } from './interfaces/routes/index.js';
 import { initializeDatabaseConnections } from './config/database.js';
 import { initializeMailer } from './config/mail.js';
-import { postQueue } from './config/bullmq.js';
 import rateLimit from '@fastify/rate-limit';
+import {thoughtQueue,meditationQueue} from './config/bullmq.js';
 
 const startServer = async () => {
   const app = fastify({ logger: true });
@@ -45,7 +45,8 @@ const startServer = async () => {
     prismaRepository,
     mongoRepository,
     mailer,
-    postQueue
+    thoughtQueue,
+    meditationQueue
   });
 
   try {

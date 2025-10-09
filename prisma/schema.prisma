@@ -46,22 +46,22 @@ model Category {
 }
 
 model User {
-  id               BigInt     @id @default(autoincrement())
-  createdAt        DateTime   @default(now()) @map("created_at")
+  id               BigInt         @id @default(autoincrement())
+  createdAt        DateTime       @default(now()) @map("created_at")
   name             String?
-  email            String     @unique
+  email            String         @unique
   password         String?
+  isVerified       Boolean        @default(false)
+  active           Boolean        @default(false)
   image            String?
-  isVerified       Boolean    @default(false)
-  active           Boolean    @default(false)
-  signupMethod     String     @default("email") @db.VarChar(20)
-  subscriptionType String     @default("free")
+  signupMethod     String         @default("email") @db.VarChar(20)
+  subscriptionType String         @default("free")
+  stripeCustomerId String?
   likedMeditations Liked[]
   playlists        Playlist[]
+  subscriptions    Subscription[]
+  transactions     Transaction[]
   userTags         UserTag[]
-
-  subscriptions Subscription[]
-  transactions  Transaction[]
 
   @@map("users")
 }
@@ -82,11 +82,12 @@ model Meditation {
   categoryId     Int
   subcategoryId  String?
   type           String?
+  likedUsers     Liked[]
   meditationTags MeditationTags[]
   category       Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory    Subcategory?         @relation(fields: [subcategoryId], references: [id])
-  likedUsers     Liked[]
   playlistItems  PlaylistMeditation[]
+  scheduledAt    DateTime? 
 
   @@map("meditations")
 }
@@ -133,13 +134,12 @@ model Subcategory {
 }
 
 model Liked {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   userId       BigInt
   meditationId String
-  createdAt    DateTime @default(now())
-
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  meditation Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  meditation   Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, meditationId])
   @@map("liked_meditations")
@@ -158,46 +158,38 @@ model ThoughtOfTheDay {
   updatedAt   DateTime      @updatedAt
 }
 
-enum ThoughtStatus {
-  PENDING
-  POSTED
-  REPOSTED
-}
-
 model Playlist {
-  id          String   @id @default(uuid())
+  id          String               @id @default(uuid())
   name        String
   icon        String?
   description String?
-  isPublic    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isPublic    Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
   userId      BigInt
-
-  user  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items PlaylistMeditation[]
+  items       PlaylistMeditation[]
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("playlists")
 }
 
 model PlaylistMeditation {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   playlistId   String
   meditationId String
-  addedAt      DateTime @default(now())
+  addedAt      DateTime   @default(now())
   order        Int?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime   @default(now())
+  meditation   Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+  playlist     Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
 
-  playlist   Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  meditation Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
-
-  @@unique([playlistId, meditationId]) // prevent duplicate meditations in the same playlist
+  @@unique([playlistId, meditationId])
   @@map("playlist_meditations")
 }
 
 model Policy {
   id        String   @id @default(cuid())
-  type      Int      @unique // 1 = Privacy Policy, 2 = Terms & Conditions
+  type      Int      @unique
   content   String
   active    Boolean  @default(true)
   isDeleted Boolean  @default(false)
@@ -212,40 +204,38 @@ model Policy {
 model OnboardingQuestion {
   id        String             @id @default(uuid())
   question  String
-  options   OnboardingOption[]
   active    Boolean            @default(true)
   isDeleted Boolean            @default(false)
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
+  options   OnboardingOption[]
 
   @@index([active, isDeleted])
   @@map("onboarding_questions")
 }
 
 model OnboardingOption {
-  id         String   @id @default(uuid())
+  id         String                @id @default(uuid())
   option     String
-  active     Boolean  @default(true)
-  isDeleted  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  active     Boolean               @default(true)
+  isDeleted  Boolean               @default(false)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
   questionId String
-
-  question OnboardingQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  tags     OnboardingOptionTag[]
+  tags       OnboardingOptionTag[]
+  question   OnboardingQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@index([questionId])
   @@map("onboarding_options")
 }
 
 model OnboardingOptionTag {
-  id        String   @id @default(uuid())
+  id        String           @id @default(uuid())
   optionId  String
   tagId     String
-  createdAt DateTime @default(now())
-
-  option OnboardingOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  tag    Tag              @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  option    OnboardingOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  tag       Tag              @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([optionId, tagId])
   @@index([optionId])
@@ -258,9 +248,8 @@ model UserTag {
   userId    BigInt
   tagId     String
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tagId])
   @@index([userId])
@@ -268,21 +257,18 @@ model UserTag {
   @@map("user_tags")
 }
 
-// subscription models
-
 model SubscriptionPlan {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String
   price         Float
-  currency      String   @default("usd")
+  currency      String         @default("usd")
   interval      String
-  intervalCount Int      @default(1) // Duration multiplier
+  intervalCount Int            @default(1)
   trialDays     Int?
-  stripePriceId String?  @unique
-  visible       Boolean  @default(true) // Visibility in app
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
+  stripePriceId String?        @unique
+  visible       Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   subscriptions Subscription[]
 
   @@map("subscription_plans")
@@ -297,13 +283,12 @@ model Subscription {
   currentPeriodEnd     DateTime
   cancelAtPeriodEnd    Boolean            @default(false)
   stripeSubscriptionId String?            @unique
-  stripeCustomerId     String
+  stripeCustomerId     String?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
-
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
-  transactions Transaction[]
+  plan                 SubscriptionPlan   @relation(fields: [planId], references: [id])
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions         Transaction[]
 
   @@unique([userId, status])
   @@map("subscriptions")
@@ -322,9 +307,9 @@ model Transaction {
   metadata              Json?
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
-
-  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                  String            @default("SUBSCRIPTION")
+  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("transactions")
 }
@@ -338,6 +323,12 @@ model Settings {
   adminEmail     String   @unique
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+enum ThoughtStatus {
+  PENDING
+  POSTED
+  REPOSTED
 }
 
 enum SubscriptionStatus {
