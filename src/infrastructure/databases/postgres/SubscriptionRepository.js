@@ -67,7 +67,9 @@ export class SubscriptionRepository {
   }
 
   async createTransaction(data) {
-    return console.log(data)
+    // FIXED: Removed the console.log that was preventing transaction creation
+    console.log('Creating transaction:', data);
+    
     return await this.prisma.transaction.create({
       data: {
         userId: BigInt(data.userId),
@@ -90,7 +92,6 @@ export class SubscriptionRepository {
             name: true,
           },
         },
-        plan: true,
         subscription: true,
       },
     });
@@ -108,7 +109,6 @@ export class SubscriptionRepository {
             name: true,
           },
         },
-        plan: true,
         subscription: true,
       },
     });
@@ -126,6 +126,24 @@ export class SubscriptionRepository {
     });
 
     if (!transaction) {
+      console.warn('Transaction not found for checkout session:', checkoutSessionId);
+      
+      // Alternative: Try to find by payment intent if available in data
+      if (data.stripePaymentIntentId) {
+        const transactionByPaymentIntent = await this.prisma.transaction.findFirst({
+          where: { 
+            stripePaymentIntentId: data.stripePaymentIntentId 
+          }
+        });
+        
+        if (transactionByPaymentIntent) {
+          return await this.prisma.transaction.update({
+            where: { id: transactionByPaymentIntent.id },
+            data,
+          });
+        }
+      }
+      
       throw new Error('Transaction not found for checkout session: ' + checkoutSessionId);
     }
 
@@ -136,13 +154,25 @@ export class SubscriptionRepository {
   }
 
   async findTransactionByStripePaymentIntent(stripePaymentIntentId) {
-    return await this.prisma.transaction.findUnique({
-      where: { stripePaymentIntentId },
+    return await this.prisma.transaction.findFirst({
+      where: { 
+        stripePaymentIntentId: stripePaymentIntentId 
+      },
       include: {
         user: true,
         subscription: true,
-        // plan: true,
       },
+    });
+  }
+
+  async findTransactionByCheckoutSession(checkoutSessionId) {
+    return await this.prisma.transaction.findFirst({
+      where: { 
+        metadata: {
+          path: ['checkoutSessionId'],
+          equals: checkoutSessionId
+        }
+      }
     });
   }
 
@@ -160,8 +190,11 @@ export class SubscriptionRepository {
       this.prisma.transaction.findMany({
         where,
         include: {
-          plan: true,
-          subscription: true,
+          subscription: {
+            include: {
+              plan: true,
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip,
@@ -204,8 +237,8 @@ export class SubscriptionRepository {
 
   async getAllSubscriptionPlans() {
     try {
-        return await this.prisma.subscriptionPlan.findMany({
-      where: { visible: true },
+      return await this.prisma.subscriptionPlan.findMany({
+        where: { visible: true },
         orderBy: { price: "asc" },
       });
     } catch (error) {
@@ -239,7 +272,6 @@ export class SubscriptionRepository {
 
   async findPlanById(planId) {
     try {
-      console.log(planId)
       return await this.prisma.subscriptionPlan.findUnique({
         where: { id: planId },
       });
@@ -377,6 +409,25 @@ export class SubscriptionRepository {
     return await this.prisma.user.update({
       where: { id: BigInt(userId) },
       data: { stripeCustomerId },
+    });
+  }
+
+  // Additional helper method to check if user has active subscription
+  async userHasActiveSubscription(userId) {
+    const subscription = await this.findActiveSubscriptionByUserId(userId);
+    return !!subscription;
+  }
+
+  // Method to get subscription by user ID
+  async getSubscriptionByUserId(userId) {
+    return await this.prisma.subscription.findFirst({
+      where: {
+        userId: BigInt(userId),
+      },
+      include: {
+        plan: true,
+      },
+      orderBy: { createdAt: "desc" },
     });
   }
 }

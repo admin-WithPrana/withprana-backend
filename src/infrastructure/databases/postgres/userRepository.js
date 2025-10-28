@@ -145,4 +145,59 @@ export class PrismaUserRepository {
       throw error;
     }
   }
+
+   async updateUserSubscriptionType(userId, subscriptionType) {
+    try {
+      console.log(`🔄 Updating user ${userId} subscription type to: ${subscriptionType}`);
+      
+      // Handle both BigInt and Number IDs
+      const id = typeof userId === 'bigint' ? Number(userId) : Number(userId);
+      
+      const updatedUser = await this.prisma.user.update({
+        where: { id },
+        data: { 
+          subscriptionType: subscriptionType.toUpperCase() // Ensure consistent casing
+        },
+      });
+      
+      console.log(`✅ User ${userId} subscription type updated to: ${updatedUser.subscriptionType}`);
+      return updatedUser;
+    } catch (error) {
+      console.error('❌ Error updating user subscription type:', error);
+      throw new Error(`Failed to update user subscription type: ${error.message}`);
+    }
+  }
+
+  // Optional: Additional helper method for subscription management
+  async getUserSubscriptionStatus(userId) {
+    try {
+      const id = typeof userId === 'bigint' ? Number(userId) : Number(userId);
+      
+      return await this.prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          email: true,
+          subscriptionType: true,
+          stripeCustomerId: true,
+          subscriptions: {
+            where: {
+              status: 'ACTIVE',
+              currentPeriodEnd: {
+                gt: new Date()
+              }
+            },
+            include: {
+              plan: true
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error getting user subscription status:', error);
+      throw error;
+    }
+  }
 }

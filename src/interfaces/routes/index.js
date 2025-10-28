@@ -107,6 +107,13 @@ export async function registerRoutes(app, deps) {
         deps.prismaRepository.prisma.user.findUnique({ where: { id: BigInt(id) } }),
       updateUserStripeCustomerId: (userId, stripeCustomerId) =>
         deps.prismaRepository.prisma.user.update({ where: { id: BigInt(userId) }, data: { stripeCustomerId } }),
+      updateUserSubscriptionType: (userId, subscriptionType) => {
+      const id = typeof userId === 'bigint' ? Number(userId) : Number(userId);
+      return deps.prismaRepository.prisma.user.update({
+        where: { id },
+        data: { subscriptionType: subscriptionType.toUpperCase() }
+      });
+    }
     };
   
     setupSubscriptionRoutes(subscriptionScope, {

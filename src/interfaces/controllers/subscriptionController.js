@@ -49,7 +49,6 @@ export class SubscriptionController {
 
   async handleWebhook(event) {
     try {
-      console.log(event)
       await this.subscriptionUseCases.handleWebhookEvent(event);
   
       return { received: true };

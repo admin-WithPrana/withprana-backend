@@ -46,23 +46,22 @@ model Category {
 }
 
 model User {
-  id               BigInt     @id @default(autoincrement())
-  createdAt        DateTime   @default(now()) @map("created_at")
+  id               BigInt         @id @default(autoincrement())
+  createdAt        DateTime       @default(now()) @map("created_at")
   name             String?
-  email            String     @unique
+  email            String         @unique
   password         String?
+  isVerified       Boolean        @default(false)
+  active           Boolean        @default(false)
   image            String?
-  isVerified       Boolean    @default(false)
-  active           Boolean    @default(false)
-  signupMethod     String     @default("email") @db.VarChar(20)
-  subscriptionType String     @default("free")
-  stripeCustomerId String?    // Add for payment tracking
+  signupMethod     String         @default("email") @db.VarChar(20)
+  subscriptionType String         @default("free")
+  stripeCustomerId String?
   likedMeditations Liked[]
   playlists        Playlist[]
+  subscriptions    Subscription[]
+  transactions     Transaction[]
   userTags         UserTag[]
-
-  subscriptions Subscription[]
-  transactions  Transaction[]
 
   @@map("users")
 }
@@ -83,6 +82,7 @@ model Meditation {
   categoryId     Int
   subcategoryId  String?
   type           String?
+  scheduledAt    DateTime?
   likedUsers     Liked[]
   meditationTags MeditationTags[]
   category       Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -261,42 +261,41 @@ model SubscriptionPlan {
   id            String         @id @default(cuid())
   name          String
   price         Float
-  currency      String   @default("usd")
+  currency      String         @default("usd")
   interval      String
-  intervalCount Int      @default(1)
+  intervalCount Int            @default(1)
   trialDays     Int?
-  stripePriceId String?  @unique
-  visible       Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  subscriptions Subscription[]   // 👈 added this
+  stripePriceId String?        @unique
+  visible       Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+  transactions  Transaction[]
 
   @@map("subscription_plans")
 }
-
 
 model Transaction {
   id                    String            @id @default(cuid())
   subscriptionId        String?
   userId                BigInt
   amount                Float
+  planId                String?
   currency              String            @default("usd")
   status                TransactionStatus @default(PENDING)
-  type                  String            @default("SUBSCRIPTION") // Add type field
   stripePaymentIntentId String?           @unique
   stripeInvoiceId       String?
   description           String?
   metadata              Json?
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
-
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  type                  String            @default("SUBSCRIPTION")
+  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+   plan         SubscriptionPlan? @relation(fields: [planId], references: [id])
 
   @@map("transactions")
 }
-
 
 model Subscription {
   id                   String             @id @default(cuid())
@@ -306,19 +305,17 @@ model Subscription {
   currentPeriodStart   DateTime
   currentPeriodEnd     DateTime
   cancelAtPeriodEnd    Boolean            @default(false)
-  stripeSubscriptionId String?            @unique  // Make optional
-  stripeCustomerId     String?            // Change from required to optional
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
-
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
-  transactions Transaction[]
+  plan                 SubscriptionPlan   @relation(fields: [planId], references: [id])
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions         Transaction[]
 
   @@unique([userId, status])
   @@map("subscriptions")
 }
-
 
 model Settings {
   id             String   @id

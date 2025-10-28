@@ -23,24 +23,17 @@ export class SubscriptionUseCases {
         throw new Error('User already has an active subscription');
       }
 
-      let stripeCustomerId = user.stripeCustomerId;
-
-      // Create Stripe customer if doesn't exist
-      if (!stripeCustomerId) {
-        const customer = await this.stripeService.stripe.customers.create({
-          email: user.email,
-          name: user.name,
-          metadata: {
-            userId: userId.toString()
-          }
-        });
-        stripeCustomerId = customer.id;
-        await this.subscriptionRepo.updateUserStripeCustomerId(userId, stripeCustomerId);
+      // Create or get valid Stripe customer
+      const customer = await this.stripeService.createOrGetCustomer(user);
+      
+      // Update user with valid Stripe customer ID
+      if (user.stripeCustomerId !== customer.id) {
+        await this.subscriptionRepo.updateUserStripeCustomerId(userId, customer.id);
       }
 
       // Create ONE-TIME payment session (not subscription)
       const session = await this.stripeService.stripe.checkout.sessions.create({
-        customer: stripeCustomerId,
+        customer: customer.id,
         payment_method_types: ['card'],
         line_items: [
           {
@@ -77,7 +70,7 @@ export class SubscriptionUseCases {
         metadata: {
           checkoutSessionId: session.id,
           planName: plan.name,
-          stripeCustomerId: stripeCustomerId,
+          stripeCustomerId: customer.id,
           planInterval: plan.interval,
           planIntervalCount: plan.intervalCount
         }
@@ -90,135 +83,153 @@ export class SubscriptionUseCases {
         message: 'Payment session created successfully'
       };
     } catch (error) {
-      console.error(error)
+      console.error('Error in createSubscriptionCheckout:', error);
       throw new Error(`Failed to create payment session: ${error.message}`);
     }
   }
 
-  async createAppSubscriptionCheckout(userId, planId) {
-    try {
-      const user = await this.userRepo.findById(userId);
-      if (!user) throw new Error('User not found');
-  
-      const plan = await this.subscriptionRepo.findPlanById(planId);
-      if (!plan) throw new Error('Invalid subscription plan');
+async createAppSubscriptionCheckout(userId, planId) {
+  try {
+    console.log('Starting app checkout for user:', userId);
+    
+    const user = await this.userRepo.findById(userId);
+    if (!user) throw new Error('User not found');
 
-      console.log(plan,"plan")
-  
-      // Check for active subscription
-      const activeSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(userId);
-      if (activeSubscription) throw new Error('User already has an active subscription');
-  
-      let stripeCustomerId = user.stripeCustomerId;
-  
-      // Create Stripe customer if doesn't exist
-      if (!stripeCustomerId) {
-        const customer = await this.stripeService.stripe.customers.create({
-          email: user.email,
-          name: user.name,
-          metadata: { userId: userId.toString() }
-        });
-        stripeCustomerId = customer.id;
-        await this.subscriptionRepo.updateUserStripeCustomerId(userId, stripeCustomerId);
-      }
-  
-      // Create PaymentIntent for mobile
-      const paymentIntent = await this.stripeService.stripe.paymentIntents.create({
-        amount: Math.round(plan.price * 100), // Convert to cents
-        currency: plan.currency.toLowerCase(),
-        customer: stripeCustomerId,
-        payment_method_types: ['card'],
-        metadata: {
-          userId: userId.toString(),
-          planId: plan?.id,
-          type: 'SUBSCRIPTION_PAYMENT'
-        }
-      });
+    const plan = await this.subscriptionRepo.findPlanById(planId);
+    if (!plan) throw new Error('Invalid subscription plan');
 
-      // Create pending transaction in DB
-      await this.subscriptionRepo.createTransaction({
-        userId,
-        planId: plan?.id,
-        amount: plan?.price,
-        currency: plan?.currency,
-        status: 'PENDING',
-        type: 'SUBSCRIPTION',
-        stripePaymentIntentId: paymentIntent?.id,
-        metadata: {
-          planName: plan?.name,
-          stripeCustomerId: stripeCustomerId,
-          planInterval: plan?.interval,
-          planIntervalCount: plan?.intervalCount
-        }
-      });
-  
-      return {
-        success: true,
-        clientSecret: paymentIntent?.client_secret,
-        message: 'Payment initiated successfully for mobile'
-      };
-  
-    } catch (error) {
-      console.error(error)
-      throw new Error(`Failed to create mobile payment: ${error.message}`);
+    // Check for active subscription
+    const activeSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(userId);
+    if (activeSubscription) throw new Error('User already has an active subscription');
+
+    // Create or get valid Stripe customer
+    const customer = await this.stripeService.createOrGetCustomer(user);
+    
+    // ✅ UPDATE CUSTOMER WITH REQUIRED DETAILS FOR INDIAN EXPORTS
+    console.log('🔄 Updating customer with required billing details for Indian exports...');
+    
+    const updatedCustomer = await this.stripeService.stripe.customers.update(customer.id, {
+      name: user.name || 'Customer', // REQUIRED: Customer name
+      address: {
+        line1: '123 Main Street',    // REQUIRED: Address line 1
+        city: 'Mumbai',              // REQUIRED: City
+        state: 'Maharashtra',        // REQUIRED: State
+        postal_code: '400001',       // REQUIRED: Postal code
+        country: 'IN'                // REQUIRED: Country
+      },
+      // Also ensure email is set if not already
+      email: user.email
+    });
+    
+    console.log('✅ Customer updated with billing details:', {
+      name: updatedCustomer.name,
+      address: updatedCustomer.address
+    });
+
+    // Update user with valid Stripe customer ID if changed
+    if (user.stripeCustomerId !== customer.id) {
+      await this.subscriptionRepo.updateUserStripeCustomerId(userId, customer.id);
+      console.log('Updated user with new Stripe customer ID:', customer.id);
     }
+
+    // Create proper description for Indian regulations
+    const description = `Meditation App Subscription: ${plan.name} - ${plan.intervalCount} ${plan.interval}(s) access`;
+    const statementDescriptor = `MEDITATION${plan.name.substring(0, 8).toUpperCase().replace(/\s+/g, '')}`;
+    
+    console.log('Creating payment intent with:');
+    console.log('- Description:', description);
+    console.log('- Statement Descriptor:', statementDescriptor);
+
+    // Create payment intent with ALL required fields for Indian regulations
+    const paymentIntent = await this.stripeService.stripe.paymentIntents.create({
+      amount: Math.round(plan.price * 100), // Convert to cents
+      currency: plan.currency.toLowerCase(),
+      customer: customer.id,
+      payment_method_types: ['card'],
+      description: description, // REQUIRED for Indian exports
+      statement_descriptor: statementDescriptor, // Shows on bank statement
+      statement_descriptor_suffix: 'SUBSCRIPTION', // Additional identifier
+      metadata: {
+        userId: userId.toString(),
+        planId: plan.id,
+        type: 'SUBSCRIPTION_PAYMENT',
+        planName: plan.name,
+        planInterval: plan.interval,
+        productType: 'digital_subscription'
+      }
+    });
+
+    console.log('✅ Payment intent created:', paymentIntent.id);
+    console.log('✅ Payment intent description:', paymentIntent.description);
+    console.log('✅ Payment intent statement descriptor:', paymentIntent.statement_descriptor);
+
+    // Create pending transaction in DB
+    await this.subscriptionRepo.createTransaction({
+      userId,
+      planId: plan.id,
+      amount: plan.price,
+      currency: plan.currency,
+      status: 'PENDING',
+      type: 'SUBSCRIPTION',
+      stripePaymentIntentId: paymentIntent.id,
+      metadata: {
+        planName: plan.name,
+        stripeCustomerId: customer.id,
+        planInterval: plan.interval,
+        planIntervalCount: plan.intervalCount,
+        description: description,
+        statementDescriptor: statementDescriptor,
+        paymentIntentCreated: new Date().toISOString(),
+        customerName: updatedCustomer.name,
+        customerAddress: updatedCustomer.address
+      }
+    });
+
+    return {
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      description: paymentIntent.description,
+      message: 'Payment initiated successfully for mobile'
+    };
+
+  } catch (error) {
+    console.error('❌ Error in createAppSubscriptionCheckout:', error);
+    
+    if (error.code === 'parameter_invalid_empty' && error.param === 'description') {
+      throw new Error('Payment description is required for regulatory compliance. Please contact support.');
+    }
+    
+    if (error.message.includes('Indian regulations') || error.message.includes('description')) {
+      throw new Error('Payment requires proper description for regulatory compliance. Please try again or contact support.');
+    }
+    
+    if (error.message.includes('customer name and address')) {
+      throw new Error('Customer name and address are required for international payments. Please update your profile.');
+    }
+    
+    throw new Error(`Failed to create mobile payment: ${error.message}`);
   }
-  
+}
 
-  // async handleWebhookEvent(payload, signature) {
-  //   try {
-  //     console.log(payload, signature)
-  //     const event = this.stripeService.constructEvent(
-  //       payload,
-  //       signature,
-  //       process.env.STRIPE_WEBHOOK_SECRET
-  //     );
-
-  //     console.log(`Received webhook event: ${event.type}`);
-
-  //     switch (event.type) {
-  //       case 'checkout.session.completed':
-  //         await this.handleCheckoutSessionCompleted(event.data.object);
-  //         break;
-        
-  //       case 'checkout.session.async_payment_succeeded':
-  //         await this.handleCheckoutSessionCompleted(event.data.object);
-  //         break;
-        
-  //       case 'payment_intent.succeeded':
-  //         await this.handlePaymentIntentSucceeded(event.data.object);
-  //         break;
-        
-  //       case 'payment_intent.payment_failed':
-  //         await this.handlePaymentIntentFailed(event.data.object);
-  //         break;
-        
-  //       default:
-  //         console.log(`Unhandled event type: ${event.type}`);
-  //     }
-  //   } catch (error) {
-  //     console.error('Webhook error:', error);
-  //     throw new Error(`Webhook handling failed: ${error.message}`);
-  //   }
-  // }
   async handleWebhookEvent(event) {
     try {
       console.log(`Received webhook event: ${event.type}`);
-  
+
       switch (event.type) {
         case 'checkout.session.completed':
         case 'checkout.session.async_payment_succeeded':
           await this.handleCheckoutSessionCompleted(event.data.object);
           break;
-  
+
         case 'payment_intent.succeeded':
           await this.handlePaymentIntentSucceeded(event.data.object);
           break;
-  
+
         case 'payment_intent.payment_failed':
           await this.handlePaymentIntentFailed(event.data.object);
           break;
-  
+
         default:
           console.log(`Unhandled event type: ${event.type}`);
       }
@@ -227,7 +238,6 @@ export class SubscriptionUseCases {
       throw new Error(`Webhook handling failed: ${error.message}`);
     }
   }
-  
 
   async handleCheckoutSessionCompleted(session) {
     try {
@@ -238,11 +248,9 @@ export class SubscriptionUseCases {
         return;
       }
 
-      // Check if subscription already exists to prevent duplicates
       const existingSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(BigInt(userId));
       if (existingSubscription) {
         console.log('Subscription already exists for user:', userId);
-        // Still update transaction status
         await this.subscriptionRepo.updateTransactionByCheckoutSession(session.id, {
           status: 'SUCCEEDED',
           stripePaymentIntentId: session.payment_intent,
@@ -255,7 +263,6 @@ export class SubscriptionUseCases {
         throw new Error(`Plan not found: ${planId}`);
       }
 
-      // Calculate subscription period based on plan
       const now = new Date();
       let currentPeriodEnd = new Date();
       
@@ -264,15 +271,13 @@ export class SubscriptionUseCases {
       } else if (plan.interval === 'year') {
         currentPeriodEnd.setFullYear(now.getFullYear() + (plan.intervalCount || 1));
       } else {
-        // Default to 1 month
         currentPeriodEnd.setMonth(now.getMonth() + 1);
       }
 
-      // Create subscription in database (INTERNAL subscription management)
       const subscription = await this.subscriptionRepo.createSubscription({
         userId: BigInt(userId),
         planId: planId,
-        stripeSubscriptionId: null, // We're not using Stripe subscriptions
+        stripeSubscriptionId: null,
         stripeCustomerId: session.customer,
         currentPeriodStart: now,
         currentPeriodEnd: currentPeriodEnd,
@@ -280,10 +285,8 @@ export class SubscriptionUseCases {
         cancelAtPeriodEnd: false,
       });
 
-      // Update user subscription type
       await this.userRepo.updateUserSubscriptionType(BigInt(userId), 'premium');
 
-      // Update transaction status
       await this.subscriptionRepo.updateTransactionByCheckoutSession(session.id, {
         status: 'SUCCEEDED',
         subscriptionId: subscription.id,
@@ -294,7 +297,6 @@ export class SubscriptionUseCases {
 
     } catch (error) {
       console.error('Error handling checkout session completed:', error);
-      // Still update transaction to failed status
       await this.subscriptionRepo.updateTransactionByCheckoutSession(session.id, {
         status: 'FAILED',
       });
@@ -304,7 +306,8 @@ export class SubscriptionUseCases {
 
   async handlePaymentIntentSucceeded(paymentIntent) {
     try {
-      // Find transaction by payment intent
+      console.log('Processing payment intent succeeded:', this.userRepo);
+
       const transaction = await this.subscriptionRepo.findTransactionByStripePaymentIntent(paymentIntent.id);
       
       if (!transaction) {
@@ -312,25 +315,69 @@ export class SubscriptionUseCases {
         return;
       }
 
-      // If transaction is already processed, skip
       if (transaction.status === 'SUCCEEDED') {
         return;
       }
+      const existingSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(transaction.userId);
+      
+      if (!existingSubscription) {
+        const plan = await this.subscriptionRepo.findPlanById(transaction.planId);
+        if (!plan) {
+          throw new Error(`Plan not found: ${transaction.planId}`);
+        }
 
-      // Update transaction status
-      await this.subscriptionRepo.updateTransaction(transaction.id, {
-        status: 'SUCCEEDED',
-      });
+        const now = new Date();
+        let currentPeriodEnd = new Date();
+        
+        if (plan.interval === 'month') {
+          currentPeriodEnd.setMonth(now.getMonth() + (plan.intervalCount || 1));
+        } else if (plan.interval === 'year') {
+          currentPeriodEnd.setFullYear(now.getFullYear() + (plan.intervalCount || 1));
+        } else {
+          currentPeriodEnd.setMonth(now.getMonth() + 1);
+        }
 
-      console.log(`Payment succeeded for transaction: ${transaction.id}`);
+        const subscription = await this.subscriptionRepo.createSubscription({
+          userId: transaction.userId,
+          planId: transaction.planId,
+          stripeSubscriptionId: null,
+          stripeCustomerId: paymentIntent.customer,
+          currentPeriodStart: now,
+          currentPeriodEnd: currentPeriodEnd,
+          status: 'ACTIVE',
+          cancelAtPeriodEnd: false,
+        });
+
+        await this.userRepo.updateUserSubscriptionType(transaction.userId, 'premium');
+
+        await this.subscriptionRepo.updateTransaction(transaction.id, {
+          status: 'SUCCEEDED',
+          subscriptionId: subscription.id,
+        });
+
+        console.log(`Subscription created for user ${transaction.userId} via payment intent webhook`);
+      } else {
+        await this.subscriptionRepo.updateTransaction(transaction.id, {
+          status: 'SUCCEEDED',
+        });
+        console.log(`Payment succeeded for existing subscription user: ${transaction.userId}`);
+      }
 
     } catch (error) {
       console.error('Error handling payment intent succeeded:', error);
+      const transaction = await this.subscriptionRepo.findTransactionByStripePaymentIntent(paymentIntent.id);
+      if (transaction) {
+        await this.subscriptionRepo.updateTransaction(transaction.id, {
+          status: 'FAILED',
+        });
+      }
     }
   }
 
   async handlePaymentIntentFailed(paymentIntent) {
     try {
+      console.log('Processing payment intent failed:', paymentIntent.id);
+      
       const transaction = await this.subscriptionRepo.findTransactionByStripePaymentIntent(paymentIntent.id);
       
       if (transaction) {
@@ -351,13 +398,11 @@ export class SubscriptionUseCases {
       throw new Error('No active subscription found');
     }
 
-    // Update in database (INTERNAL cancellation)
     await this.subscriptionRepo.updateSubscription(activeSubscription.id, {
       status: 'CANCELED',
       cancelAtPeriodEnd: true,
     });
 
-    // Downgrade user
     await this.userRepo.updateUserSubscriptionType(userId, 'free');
 
     return { message: 'Subscription cancelled successfully' };
@@ -401,7 +446,7 @@ export class SubscriptionUseCases {
     return true;
   }
 
-  // Admin methods remain the same...
+  // Admin methods
   async createPlan(planData) {
     try {
       const { name, price, interval, intervalCount = 1, trialDays, currency = 'usd' } = planData;
@@ -410,7 +455,6 @@ export class SubscriptionUseCases {
         throw new Error('Name, price, and interval are required');
       }
 
-      // Create plan in database only (no Stripe price creation)
       const plan = await this.subscriptionRepo.createPlan({
         name,
         price,

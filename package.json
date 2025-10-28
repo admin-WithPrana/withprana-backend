@@ -25,6 +25,7 @@
     "nodemailer": "^6.9.3",
     "postgres": "^3.4.7",
     "prisma": "^6.13.0",
+    "raw-body": "^3.0.1",
     "streamifier": "^0.1.1",
     "stripe": "^18.5.0",
     "uuid": "^9.0.1"
