@@ -8,6 +8,8 @@ import { initializeMailer } from './config/mail.js';
 import { PostgresOTPRepository } from './infrastructure/databases/postgres/otpRepository.js';
 import { postQueue } from './config/bullmq.js';
 import fastifyRawBody from 'fastify-raw-body';
+import rateLimit from '@fastify/rate-limit';
+import {thoughtQueue,meditationQueue} from './config/bullmq.js';
 
 const startServer = async () => {
   const app = fastify({ logger: true });
@@ -31,6 +33,18 @@ const startServer = async () => {
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 
+  await app.register(rateLimit, {
+    max: 60, // each user/IP can make 60 requests per minute
+    timeWindow: '1 minute',
+    allowList: ['127.0.0.1'], 
+    keyGenerator: (req) => req.user?.id || req.ip,
+    errorResponseBuilder: (req, context) => ({
+      code: 429,
+      error: 'Too Many Requests',
+      message: 'You’re going a little fast — please relax and try again soon 🧘‍♂️',
+    }),
+  });
+
   const { prisma, mongoClient } = await initializeDatabaseConnections();
   const mailer = initializeMailer();
 
@@ -41,7 +55,8 @@ const startServer = async () => {
     prismaRepository,
     mongoRepository,
     mailer,
-    postQueue
+    thoughtQueue,
+    meditationQueue
   });
 
   try {

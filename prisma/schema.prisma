@@ -82,12 +82,12 @@ model Meditation {
   categoryId     Int
   subcategoryId  String?
   type           String?
-  scheduledAt    DateTime?
   likedUsers     Liked[]
   meditationTags MeditationTags[]
   category       Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory    Subcategory?         @relation(fields: [subcategoryId], references: [id])
   playlistItems  PlaylistMeditation[]
+  scheduledAt    DateTime? 
 
   @@map("meditations")
 }
@@ -326,6 +326,39 @@ model Settings {
   adminEmail     String   @unique
   createdAt      DateTime @default(now())
   updatedAt      DateTime
+}
+model Transaction {
+  id                    String            @id @default(cuid())
+  subscriptionId        String?
+  userId                BigInt
+  amount                Float
+  currency              String            @default("usd")
+  status                TransactionStatus @default(PENDING)
+  stripePaymentIntentId String?           @unique
+  stripeInvoiceId       String?
+  description           String?
+  metadata              Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  type                  String            @default("SUBSCRIPTION")
+  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+enum ThoughtStatus {
+  PENDING
+  POSTED
+  REPOSTED
+}
+
+model Settings {
+  id             String   @id @default(uuid())
+  tagline        String
+  currentVersion String
+  supportEmail   String   @unique
+  releaseNote    String?
+  adminEmail     String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 enum ThoughtStatus {

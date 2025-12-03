@@ -12,6 +12,9 @@ import { policyRoutes } from "./privacyPolicyRoutes.js";
 import { onboardingRoutes } from "./onBoardingRoutes.js";
 import { userTagsRoutes } from "./userTagRoutes.js";
 import { setupSubscriptionRoutes } from "./subscriptionRoutes.js";
+import {userTagsRoutes} from "./userTagRoutes.js"
+import {setupSubscriptionRoutes}  from "./subscriptionRoutes.js"
+import {settingsRoutes} from './settingsRoute.js'
 
 export async function registerRoutes(app, deps) {
   // ------------------------ USER ROUTES ------------------------
@@ -40,13 +43,16 @@ export async function registerRoutes(app, deps) {
     categoryRoutes(categoryScope, { prismaRepository: deps.prismaRepository });
   }, { prefix: "/api/category" });
 
-  // ------------------------ MEDITATION ROUTES ------------------------
-  app.register(async function (meditationScope) {
-    meditationRoutes(meditationScope, {
-      prismaRepository: deps.prismaRepository,
-      mongoRepository: deps.mongoRepository,
-    });
-  }, { prefix: "/api/meditation" });
+  app.register(
+    async function (meditationScope) {
+      meditationRoutes(meditationScope, {
+        prismaRepository: deps.prismaRepository,
+        mongoRepository: deps.mongoRepository,
+        meditationQueue:deps.meditationQueue
+      });
+    },
+    { prefix: "/api/meditation" }
+  );
 
   // ------------------------ SUBCATEGORY ROUTES ------------------------
   app.register(async function (subcategoryScope) {
@@ -122,4 +128,16 @@ export async function registerRoutes(app, deps) {
     });
   }, { prefix: "/api/subscriptions" });
   
+    },
+    { prefix: "/api/subscriptions" }
+  );
+
+   app.register(
+    async function (settingsScope) {
+      settingsRoutes(settingsScope, {
+        prismaRepository: deps.prismaRepository,
+      });
+    },
+    { prefix: "/api/settings" }
+  );
 }
