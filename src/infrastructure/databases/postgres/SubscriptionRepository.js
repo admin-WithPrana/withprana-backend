@@ -4,11 +4,21 @@ export class SubscriptionRepository {
   }
 
   async createSubscription(data) {
-    return await this.prisma.subscription.create({
+    const subscription = await this.prisma.subscription.create({
       data: {
-        ...data,
         userId: BigInt(data.userId),
-      },
+        planId: data.planId,
+        stripeSubscriptionId: data.stripeSubscriptionId || null,
+        stripeCustomerId: data.stripeCustomerId || null,
+        currentPeriodStart: data.currentPeriodStart,
+        currentPeriodEnd: data.currentPeriodEnd,
+        status: data.status,
+        cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
+      }
+    });
+  
+    return await this.prisma.subscription.findUnique({
+      where: { id: subscription.id },
       include: {
         plan: true,
         user: {
@@ -56,21 +66,23 @@ export class SubscriptionRepository {
     });
   }
 
-  async findSubscriptionByStripeId(stripeSubscriptionId) {
-    return await this.prisma.subscription.findUnique({
-      where: { stripeSubscriptionId },
-      include: {
-        plan: true,
-        user: true,
-      },
-    });
-  }
-
   async createTransaction(data) {
+    // FIXED: Removed the console.log that was preventing transaction creation
+    console.log('Creating transaction:', data);
+    
     return await this.prisma.transaction.create({
       data: {
-        ...data,
         userId: BigInt(data.userId),
+        subscriptionId: data.subscriptionId || null,
+        planId: data.planId || null,
+        amount: data.amount,
+        currency: data.currency || 'usd',
+        status: data.status,
+        type: data.type || 'SUBSCRIPTION',
+        stripePaymentIntentId: data.stripePaymentIntentId || null,
+        stripeInvoiceId: data.stripeInvoiceId || null,
+        description: data.description || null,
+        metadata: data.metadata || null,
       },
       include: {
         user: {
@@ -80,7 +92,6 @@ export class SubscriptionRepository {
             name: true,
           },
         },
-        plan: true,
         subscription: true,
       },
     });
@@ -98,20 +109,70 @@ export class SubscriptionRepository {
             name: true,
           },
         },
-        plan: true,
         subscription: true,
       },
     });
   }
 
+  async updateTransactionByCheckoutSession(checkoutSessionId, data) {
+    // Find transaction by checkout session ID in metadata
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { 
+        metadata: {
+          path: ['checkoutSessionId'],
+          equals: checkoutSessionId
+        }
+      }
+    });
+
+    if (!transaction) {
+      console.warn('Transaction not found for checkout session:', checkoutSessionId);
+      
+      // Alternative: Try to find by payment intent if available in data
+      if (data.stripePaymentIntentId) {
+        const transactionByPaymentIntent = await this.prisma.transaction.findFirst({
+          where: { 
+            stripePaymentIntentId: data.stripePaymentIntentId 
+          }
+        });
+        
+        if (transactionByPaymentIntent) {
+          return await this.prisma.transaction.update({
+            where: { id: transactionByPaymentIntent.id },
+            data,
+          });
+        }
+      }
+      
+      throw new Error('Transaction not found for checkout session: ' + checkoutSessionId);
+    }
+
+    return await this.prisma.transaction.update({
+      where: { id: transaction.id },
+      data,
+    });
+  }
+
   async findTransactionByStripePaymentIntent(stripePaymentIntentId) {
-    return await this.prisma.transaction.findUnique({
-      where: { stripePaymentIntentId },
+    return await this.prisma.transaction.findFirst({
+      where: { 
+        stripePaymentIntentId: stripePaymentIntentId 
+      },
       include: {
         user: true,
         subscription: true,
-        plan: true,
       },
+    });
+  }
+
+  async findTransactionByCheckoutSession(checkoutSessionId) {
+    return await this.prisma.transaction.findFirst({
+      where: { 
+        metadata: {
+          path: ['checkoutSessionId'],
+          equals: checkoutSessionId
+        }
+      }
     });
   }
 
@@ -129,8 +190,11 @@ export class SubscriptionRepository {
       this.prisma.transaction.findMany({
         where,
         include: {
-          plan: true,
-          subscription: true,
+          subscription: {
+            include: {
+              plan: true,
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip,
@@ -148,13 +212,6 @@ export class SubscriptionRepository {
         pages: Math.ceil(total / limit),
       },
     };
-  }
-
-  async updateUserStripeCustomerId(userId, stripeCustomerId) {
-    return await this.prisma.user.update({
-      where: { id: BigInt(userId) },
-      data: { stripeCustomerId },
-    });
   }
 
   async getUserWithSubscription(userId) {
@@ -179,46 +236,58 @@ export class SubscriptionRepository {
   }
 
   async getAllSubscriptionPlans() {
-    return await this.prisma.subscriptionPlan.findMany({
-      // where: { active: true },
-      orderBy: { price: "asc" },
-    });
-  }
-
-  async findPlanByStripePriceId(stripePriceId) {
-    return await this.prisma.subscriptionPlan.findUnique({
-      where: { stripePriceId },
-    });
+    try {
+      return await this.prisma.subscriptionPlan.findMany({
+        where: { visible: true },
+        orderBy: { price: "asc" },
+      });
+    } catch (error) {
+      console.error(error)
+      throw new Error('Failed to get all subscription plans');
+    }
   }
 
   async createPlan(data) {
-    return await this.prisma.subscriptionPlan.create({
-      data,
-    });
+    try {
+      return await this.prisma.subscriptionPlan.create({
+        data,
+      });
+    } catch (error) {
+      console.error(error)
+      throw new Error('Failed to create subscription plan');
+    }
   }
 
   async updatePlan(planId, data) {
-    return await this.prisma.subscriptionPlan.update({
-      where: { id: planId },
-      data,
-    });
+    try {
+      return await this.prisma.subscriptionPlan.update({
+        where: { id: planId },
+        data,
+      });
+    } catch (error) {
+      console.error(error)
+      throw new Error('Failed to update subscription plan by ID: ' + planId);
+    }
   }
 
   async findPlanById(planId) {
-    return await this.prisma.subscriptionPlan.findUnique({
-      where: { id: planId },
-    });
+    try {
+      return await this.prisma.subscriptionPlan.findUnique({
+        where: { id: planId },
+      });
+    } catch (error) {
+      console.error(error)
+      throw new Error('Failed to find subscription plan by ID: ' + planId);
+    }
   }
 
-  // Admin: Get all subscriptions with pagination
   async getSubscriptions(filters = {}) {
-    const { page = 1, limit = 10,status,userId,planId,search} = filters;
-
+    const { page = 1, limit = 10, status, userId, planId, search } = filters;
     const skip = (page - 1) * limit;
 
     const where = {
       ...(status && { status }),
-      ...(userId && { userId }),
+      ...(userId && { userId: BigInt(userId) }),
       ...(planId && { planId }),
       ...(search && {
         OR: [
@@ -297,7 +366,7 @@ export class SubscriptionRepository {
     const where = {
       ...(status && { status }),
       ...(type && { type }),
-      ...(userId && { userId }),
+      ...(userId && { userId: BigInt(userId) }),
       ...(subscriptionId && { subscriptionId }),
     };
 
@@ -334,5 +403,31 @@ export class SubscriptionRepository {
         pages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async updateUserStripeCustomerId(userId, stripeCustomerId) {
+    return await this.prisma.user.update({
+      where: { id: BigInt(userId) },
+      data: { stripeCustomerId },
+    });
+  }
+
+  // Additional helper method to check if user has active subscription
+  async userHasActiveSubscription(userId) {
+    const subscription = await this.findActiveSubscriptionByUserId(userId);
+    return !!subscription;
+  }
+
+  // Method to get subscription by user ID
+  async getSubscriptionByUserId(userId) {
+    return await this.prisma.subscription.findFirst({
+      where: {
+        userId: BigInt(userId),
+      },
+      include: {
+        plan: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
   }
 }

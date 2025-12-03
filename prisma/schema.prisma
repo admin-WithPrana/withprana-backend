@@ -270,8 +270,31 @@ model SubscriptionPlan {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   subscriptions Subscription[]
+  transactions  Transaction[]
 
   @@map("subscription_plans")
+}
+
+model Transaction {
+  id                    String            @id @default(cuid())
+  subscriptionId        String?
+  userId                BigInt
+  amount                Float
+  planId                String?
+  currency              String            @default("usd")
+  status                TransactionStatus @default(PENDING)
+  stripePaymentIntentId String?           @unique
+  stripeInvoiceId       String?
+  description           String?
+  metadata              Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  type                  String            @default("SUBSCRIPTION")
+  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+   plan         SubscriptionPlan? @relation(fields: [planId], references: [id])
+
+  @@map("transactions")
 }
 
 model Subscription {
@@ -294,6 +317,16 @@ model Subscription {
   @@map("subscriptions")
 }
 
+model Settings {
+  id             String   @id
+  tagline        String
+  currentVersion String
+  supportEmail   String   @unique
+  releaseNote    String?
+  adminEmail     String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+}
 model Transaction {
   id                    String            @id @default(cuid())
   subscriptionId        String?
@@ -311,7 +344,10 @@ model Transaction {
   subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("transactions")
+enum ThoughtStatus {
+  PENDING
+  POSTED
+  REPOSTED
 }
 
 model Settings {
