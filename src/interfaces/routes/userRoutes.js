@@ -38,10 +38,8 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
     }
     
     if (profilePicture?.file) {
-      profilePictureUrl = await uploadToCloudinary(
-        profilePicture,
-        'users/profile-pictures'
-      );
+      let image=uploadToS3(profilePicture,"images")
+      profilePictureUrl=image[0]
     }
 
     const payload = {
@@ -79,10 +77,9 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
 
       if (profilePicture) {
         if (profilePicture?.file) {
-          profilePictureUrl = await uploadToCloudinary(
-            profilePicture,
-            'users/profile-pictures'
-          );
+
+          let image=uploadToS3(profilePicture,"images")
+          profilePictureUrl=image[0]
         } else if (typeof profilePicture === 'string' && profilePicture.trim() !== '') {
           profilePictureUrl = profilePicture;
         }

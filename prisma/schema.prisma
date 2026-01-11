@@ -145,19 +145,6 @@ model Liked {
   @@map("liked_meditations")
 }
 
-model ThoughtOfTheDay {
-  id          String        @id @default(cuid())
-  thumbnail   String
-  link        String
-  title       String
-  duration    String
-  description String
-  scheduledAt DateTime
-  status      ThoughtStatus @default(PENDING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-}
-
 model Playlist {
   id          String               @id @default(uuid())
   name        String
@@ -252,8 +239,8 @@ model UserTag {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tagId])
-  @@index([userId])
   @@index([tagId])
+  @@index([userId])
   @@map("user_tags")
 }
 
@@ -273,28 +260,6 @@ model SubscriptionPlan {
   transactions  Transaction[]
 
   @@map("subscription_plans")
-}
-
-model Transaction {
-  id                    String            @id @default(cuid())
-  subscriptionId        String?
-  userId                BigInt
-  amount                Float
-  planId                String?
-  currency              String            @default("usd")
-  status                TransactionStatus @default(PENDING)
-  stripePaymentIntentId String?           @unique
-  stripeInvoiceId       String?
-  description           String?
-  metadata              Json?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
-  type                  String            @default("SUBSCRIPTION")
-  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
-  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-   plan         SubscriptionPlan? @relation(fields: [planId], references: [id])
-
-  @@map("transactions")
 }
 
 model Subscription {
@@ -317,15 +282,50 @@ model Subscription {
   @@map("subscriptions")
 }
 
+model Transaction {
+  id                    String            @id @default(cuid())
+  subscriptionId        String?
+  userId                BigInt
+  amount                Float
+  currency              String            @default("usd")
+  status                TransactionStatus @default(PENDING)
+  stripePaymentIntentId String?           @unique
+  stripeInvoiceId       String?
+  description           String?
+  metadata              Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  type                  String            @default("SUBSCRIPTION")
+  planId                String?
+  plan                  SubscriptionPlan? @relation(fields: [planId], references: [id])
+  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
 model Settings {
-  id             String   @id
+  id             String   @id @default(uuid())
   tagline        String
   currentVersion String
   supportEmail   String   @unique
   releaseNote    String?
   adminEmail     String   @unique
   createdAt      DateTime @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime @updatedAt
+}
+
+model ThoughtOfTheDay {
+  id          String        @id
+  thumbnail   String
+  link        String
+  title       String
+  duration    String
+  description String
+  scheduledAt DateTime
+  status      ThoughtStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
 }
 
 enum ThoughtStatus {
