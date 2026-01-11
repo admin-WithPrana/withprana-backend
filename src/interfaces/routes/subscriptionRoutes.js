@@ -109,11 +109,11 @@ app.post('/webhook', {
 });
 
   app.register(async (normalApp) => {
-    normalApp.get('/plans', (req, res) => subscriptionController.getPlans(req, res));
-
+    
     normalApp.register(async (protectedApp) => {
       protectedApp.addHook('onRequest', authMiddleware);
-
+      protectedApp.get('/plans', (req, res) => subscriptionController.getPlans(req, res));
+      
       protectedApp.post('/web-checkout', (req, res) => subscriptionController.createCheckoutSession(req, res));
       protectedApp.post('/app-checkout', (req, res) => subscriptionController.createAppCheckoutSession(req, res));
       protectedApp.get('/status', (req, res) => subscriptionController.getSubscriptionStatus(req, res));

@@ -3,6 +3,7 @@ import { PostgresOTPRepository } from '../../infrastructure/databases/postgres/o
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 import fastifyMultipart from '@fastify/multipart';
 import { uploadToCloudinary } from '../../infrastructure/services/cloudinaryService.js';
+import { SubscriptionRepository } from '../../infrastructure/databases/postgres/SubscriptionRepository.js';
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {

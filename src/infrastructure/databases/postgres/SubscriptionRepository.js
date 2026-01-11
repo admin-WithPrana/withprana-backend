@@ -430,4 +430,29 @@ export class SubscriptionRepository {
       orderBy: { createdAt: "desc" },
     });
   }
+
+  async isUserSubscribed(userId) {
+    try {
+      const activeSubscription = await this.prisma.subscription.findFirst({
+        where: {
+          userId: BigInt(userId),
+          status: "ACTIVE",
+          currentPeriodEnd: {
+            gt: new Date(), // not expired
+          },
+        },
+        include: {
+          plan: true,
+        },
+      });
+
+      return {
+        isSubscribed: !!activeSubscription,
+        subscription: activeSubscription || null,
+      };
+    } catch (error) {
+      console.error("Error checking user subscription:", error);
+      throw new Error("Failed to check user subscription");
+    }
+  }
 }

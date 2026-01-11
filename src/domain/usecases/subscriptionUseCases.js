@@ -432,7 +432,13 @@ async createAppSubscriptionCheckout(userId, planId) {
     return await this.subscriptionRepo.getUserTransactions(userId, filters);
   }
 
-  async getSubscriptionPlans() {
+  async getSubscriptionPlans(token) {
+    const plans = await this.subscriptionRepo.isUserSubscribed(token?.id);
+
+    if(plans?.isSubscribed){
+      return plans
+    }
+
     return await this.subscriptionRepo.getAllSubscriptionPlans();
   }
 
