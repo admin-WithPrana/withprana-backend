@@ -1,6 +1,34 @@
+import {
+  encryptDeterministic,
+  decrypt,
+  decryptDeterministic,
+} from "../../../utils/encryption.js";
+
 export class SubscriptionRepository {
   constructor(prisma) {
     this.prisma = prisma;
+  }
+
+  _decryptUser(user) {
+    if (!user) return user;
+    const decrypted = { ...user };
+    if (decrypted.name) decrypted.name = decrypt(decrypted.name);
+    if (decrypted.email)
+      decrypted.email = decryptDeterministic(decrypted.email);
+    // Handle nested user object if it exists (some queries return { user: ... })
+    if (decrypted.user) {
+      decrypted.user = this._decryptUser(decrypted.user);
+    }
+    return decrypted;
+  }
+
+  _decryptTransaction(transaction) {
+    if (!transaction) return transaction;
+    const decrypted = { ...transaction };
+    if (decrypted.user) {
+      decrypted.user = this._decryptUser(decrypted.user);
+    }
+    return decrypted;
   }
 
   async createSubscription(data) {
@@ -14,10 +42,10 @@ export class SubscriptionRepository {
         currentPeriodEnd: data.currentPeriodEnd,
         status: data.status,
         cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
-      }
+      },
     });
-  
-    return await this.prisma.subscription.findUnique({
+
+    const result = await this.prisma.subscription.findUnique({
       where: { id: subscription.id },
       include: {
         plan: true,
@@ -31,10 +59,15 @@ export class SubscriptionRepository {
         },
       },
     });
+
+    if (result && result.user) {
+      result.user = this._decryptUser(result.user);
+    }
+    return result;
   }
 
   async updateSubscription(id, data) {
-    return await this.prisma.subscription.update({
+    const result = await this.prisma.subscription.update({
       where: { id },
       data,
       include: {
@@ -49,9 +82,16 @@ export class SubscriptionRepository {
         },
       },
     });
+
+    if (result && result.user) {
+      result.user = this._decryptUser(result.user);
+    }
+    return result;
   }
 
   async findActiveSubscriptionByUserId(userId) {
+    // This doesn't return user details, just subscription + plan.
+    // But good to check if it does in future.
     return await this.prisma.subscription.findFirst({
       where: {
         userId: BigInt(userId),
@@ -68,17 +108,17 @@ export class SubscriptionRepository {
 
   async createTransaction(data) {
     // FIXED: Removed the console.log that was preventing transaction creation
-    console.log('Creating transaction:', data);
-    
-    return await this.prisma.transaction.create({
+    console.log("Creating transaction:", data);
+
+    const result = await this.prisma.transaction.create({
       data: {
         userId: BigInt(data.userId),
         subscriptionId: data.subscriptionId || null,
         planId: data.planId || null,
         amount: data.amount,
-        currency: data.currency || 'usd',
+        currency: data.currency || "usd",
         status: data.status,
-        type: data.type || 'SUBSCRIPTION',
+        type: data.type || "SUBSCRIPTION",
         stripePaymentIntentId: data.stripePaymentIntentId || null,
         stripeInvoiceId: data.stripeInvoiceId || null,
         description: data.description || null,
@@ -95,10 +135,12 @@ export class SubscriptionRepository {
         subscription: true,
       },
     });
+
+    return this._decryptTransaction(result);
   }
 
   async updateTransaction(id, data) {
-    return await this.prisma.transaction.update({
+    const result = await this.prisma.transaction.update({
       where: { id },
       data,
       include: {
@@ -112,30 +154,35 @@ export class SubscriptionRepository {
         subscription: true,
       },
     });
+    return this._decryptTransaction(result);
   }
 
   async updateTransactionByCheckoutSession(checkoutSessionId, data) {
     // Find transaction by checkout session ID in metadata
     const transaction = await this.prisma.transaction.findFirst({
-      where: { 
+      where: {
         metadata: {
-          path: ['checkoutSessionId'],
-          equals: checkoutSessionId
-        }
-      }
+          path: ["checkoutSessionId"],
+          equals: checkoutSessionId,
+        },
+      },
     });
 
     if (!transaction) {
-      console.warn('Transaction not found for checkout session:', checkoutSessionId);
-      
+      console.warn(
+        "Transaction not found for checkout session:",
+        checkoutSessionId
+      );
+
       // Alternative: Try to find by payment intent if available in data
       if (data.stripePaymentIntentId) {
-        const transactionByPaymentIntent = await this.prisma.transaction.findFirst({
-          where: { 
-            stripePaymentIntentId: data.stripePaymentIntentId 
-          }
-        });
-        
+        const transactionByPaymentIntent =
+          await this.prisma.transaction.findFirst({
+            where: {
+              stripePaymentIntentId: data.stripePaymentIntentId,
+            },
+          });
+
         if (transactionByPaymentIntent) {
           return await this.prisma.transaction.update({
             where: { id: transactionByPaymentIntent.id },
@@ -143,8 +190,10 @@ export class SubscriptionRepository {
           });
         }
       }
-      
-      throw new Error('Transaction not found for checkout session: ' + checkoutSessionId);
+
+      throw new Error(
+        "Transaction not found for checkout session: " + checkoutSessionId
+      );
     }
 
     return await this.prisma.transaction.update({
@@ -154,25 +203,26 @@ export class SubscriptionRepository {
   }
 
   async findTransactionByStripePaymentIntent(stripePaymentIntentId) {
-    return await this.prisma.transaction.findFirst({
-      where: { 
-        stripePaymentIntentId: stripePaymentIntentId 
+    const result = await this.prisma.transaction.findFirst({
+      where: {
+        stripePaymentIntentId: stripePaymentIntentId,
       },
       include: {
         user: true,
         subscription: true,
       },
     });
+    return this._decryptTransaction(result);
   }
 
   async findTransactionByCheckoutSession(checkoutSessionId) {
     return await this.prisma.transaction.findFirst({
-      where: { 
+      where: {
         metadata: {
-          path: ['checkoutSessionId'],
-          equals: checkoutSessionId
-        }
-      }
+          path: ["checkoutSessionId"],
+          equals: checkoutSessionId,
+        },
+      },
     });
   }
 
@@ -203,8 +253,10 @@ export class SubscriptionRepository {
       this.prisma.transaction.count({ where }),
     ]);
 
+    // Transaction usually just has user ID in this view according to schema/include,
+    // but good practice to map if we included user. Here we didn't include user.
     return {
-      transactions,
+      transactions: transactions.map((t) => this._decryptTransaction(t)),
       pagination: {
         page,
         limit,
@@ -215,7 +267,7 @@ export class SubscriptionRepository {
   }
 
   async getUserWithSubscription(userId) {
-    return await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
       include: {
         subscriptions: {
@@ -233,6 +285,7 @@ export class SubscriptionRepository {
         },
       },
     });
+    return this._decryptUser(user);
   }
 
   async getAllSubscriptionPlans() {
@@ -242,8 +295,8 @@ export class SubscriptionRepository {
         orderBy: { price: "asc" },
       });
     } catch (error) {
-      console.error(error)
-      throw new Error('Failed to get all subscription plans');
+      console.error(error);
+      throw new Error("Failed to get all subscription plans");
     }
   }
 
@@ -253,8 +306,8 @@ export class SubscriptionRepository {
         data,
       });
     } catch (error) {
-      console.error(error)
-      throw new Error('Failed to create subscription plan');
+      console.error(error);
+      throw new Error("Failed to create subscription plan");
     }
   }
 
@@ -265,8 +318,8 @@ export class SubscriptionRepository {
         data,
       });
     } catch (error) {
-      console.error(error)
-      throw new Error('Failed to update subscription plan by ID: ' + planId);
+      console.error(error);
+      throw new Error("Failed to update subscription plan by ID: " + planId);
     }
   }
 
@@ -276,8 +329,8 @@ export class SubscriptionRepository {
         where: { id: planId },
       });
     } catch (error) {
-      console.error(error)
-      throw new Error('Failed to find subscription plan by ID: ' + planId);
+      console.error(error);
+      throw new Error("Failed to find subscription plan by ID: " + planId);
     }
   }
 
@@ -289,14 +342,21 @@ export class SubscriptionRepository {
       ...(status && { status }),
       ...(userId && { userId: BigInt(userId) }),
       ...(planId && { planId }),
-      ...(search && {
-        OR: [
-          { user: { email: { contains: search, mode: "insensitive" } } },
-          { user: { name: { contains: search, mode: "insensitive" } } },
-          { plan: { name: { contains: search, mode: "insensitive" } } },
-        ],
-      }),
     };
+
+    if (search) {
+      // Handle encryption for search
+      // Fuzzy search for Name is NOT supported with randomized encryption.
+      // We can only do exact match for Email using deterministic encryption.
+
+      const encryptedSearch = encryptDeterministic(search);
+
+      where.OR = [
+        { user: { email: { equals: encryptedSearch } } }, // Exact match only
+        // { user: { name: { contains: search, mode: "insensitive" } } }, // Cannot do this anymore
+        { plan: { name: { contains: search, mode: "insensitive" } } },
+      ];
+    }
 
     const [subscriptions, total] = await Promise.all([
       this.prisma.subscription.findMany({
@@ -319,8 +379,15 @@ export class SubscriptionRepository {
       this.prisma.subscription.count({ where }),
     ]);
 
+    const decryptedSubscriptions = subscriptions.map((sub) => {
+      if (sub.user) {
+        sub.user = this._decryptUser(sub.user);
+      }
+      return sub;
+    });
+
     return {
-      subscriptions,
+      subscriptions: decryptedSubscriptions,
       pagination: {
         page,
         limit,
@@ -331,7 +398,7 @@ export class SubscriptionRepository {
   }
 
   async findSubscriptionById(subscriptionId) {
-    return await this.prisma.subscription.findUnique({
+    const subscription = await this.prisma.subscription.findUnique({
       where: { id: subscriptionId },
       include: {
         user: {
@@ -349,6 +416,11 @@ export class SubscriptionRepository {
         },
       },
     });
+
+    if (subscription && subscription.user) {
+      subscription.user = this._decryptUser(subscription.user);
+    }
+    return subscription;
   }
 
   async getAdminTransactions(filters = {}) {
@@ -395,7 +467,7 @@ export class SubscriptionRepository {
     ]);
 
     return {
-      transactions,
+      transactions: transactions.map((t) => this._decryptTransaction(t)),
       pagination: {
         page,
         limit,

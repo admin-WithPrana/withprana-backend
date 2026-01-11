@@ -1,7 +1,12 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { UserUseCases } from "../src/domain/usecases/userUseCases.js";
 import { PrismaUserRepository } from "../src/infrastructure/databases/postgres/userRepository.js";
 import { PostgresOTPRepository } from "../src/infrastructure/databases/postgres/otpRepository.js";
+
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
 
 const prisma = new PrismaClient();
 const userRepository = new PrismaUserRepository(prisma);
@@ -98,6 +103,50 @@ async function verifyEncryption() {
 
     console.log(
       "✅ VERIFICATION SUCCESSFUL: Data is encrypted in DB and decrypted on retrieval."
+    );
+
+    // 4. Verify Middleware Token Decryption
+    console.log("Verifying Middleware Token Decryption...");
+    const { authMiddleware } = await import(
+      "../src/interfaces/middleware/authMiddleware.js"
+    );
+
+    // Generate token (now contains encrypted payload)
+    const token = userUseCases.generateToken(retrievedUser);
+    console.log(
+      "Generated Token (First 20 chars):",
+      token.substring(0, 20) + "..."
+    );
+
+    // Mock Req/Res/Next
+    const req = {
+      headers: { authorization: `Bearer ${token}` },
+      body: { existingField: "should_persist" },
+    };
+    const res = {
+      status: (code) => ({
+        json: (data) => console.log(`[Middleware Response ${code}]`, data),
+      }),
+    };
+    const next = () => {
+      console.log("Middleware called next()");
+    };
+
+    // Run Middleware
+    authMiddleware(req, res, next);
+
+    console.log("Middleware Result req.user.email:", req.user.email);
+    console.log("Middleware Result req.body.email:", req.body.email);
+
+    if (req.user.email !== TEST_EMAIL)
+      throw new Error("Middleware failed to decrypt email in req.user");
+    if (req.body.email !== TEST_EMAIL)
+      throw new Error("Middleware failed to inject email into req.body");
+    if (req.user.name !== TEST_NAME)
+      throw new Error("Middleware failed to decrypt name in req.user");
+
+    console.log(
+      "✅ MIDDLEWARE VERIFICATION SUCCESSFUL: Token carries encrypted payload which middleware decrypts."
     );
   } catch (error) {
     console.error("❌ VERIFICATION FAILED:", error);

@@ -296,8 +296,8 @@ export class UserUseCases {
     return jwt.sign(
       {
         id: user.id,
-        email: user.email,
-        name: user?.name,
+        email: encryptDeterministic(user.email),
+        name: user.name ? encrypt(user.name) : undefined,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
