@@ -62,6 +62,7 @@ model User {
   subscriptions    Subscription[]
   transactions     Transaction[]
   userTags         UserTag[]
+  encryptedUserKey String?
 
   @@map("users")
 }

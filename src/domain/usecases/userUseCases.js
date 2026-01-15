@@ -81,7 +81,7 @@ export class UserUseCases {
 
         // Encrypt name before updating
         const updateData = {
-          name: userData.name ? encrypt(userData.name) : undefined,
+          name: userData.name ? userData.name : undefined,
           image: userData.image,
           signupMethod: this.signupSelector(Number(userData.method)),
         };
@@ -110,7 +110,7 @@ export class UserUseCases {
 
       const userToSave = {
         ...user,
-        name: encrypt(user.name),
+        name: user.name,
         email: encryptedEmail,
       };
 
@@ -156,7 +156,7 @@ export class UserUseCases {
 
     const userToSave = {
       ...user,
-      name: encrypt(user.name),
+      name: user.name,
       email: encryptedEmail,
     };
 
@@ -342,7 +342,7 @@ export class UserUseCases {
 
   async updateUser(id, data) {
     const updateData = { ...data };
-    if (updateData.name) updateData.name = encrypt(updateData.name);
+    if (updateData.name) updateData.name = updateData.name;
     if (updateData.email)
       updateData.email = encryptDeterministic(updateData.email);
 

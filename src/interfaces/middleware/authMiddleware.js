@@ -1,7 +1,14 @@
 import jwt from "jsonwebtoken";
-import { decrypt, decryptDeterministic } from "../../utils/encryption.js";
+import { PrismaClient } from "@prisma/client";
+import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 
-export function authMiddleware(req, res, next) {
+// Initialize Prisma Client and Repository
+// Note: In a production app with dependency injection, this should be injected.
+// But for middleware in this structure, we instantiate here or reuse a singleton.
+const prisma = new PrismaClient();
+const userRepository = new PrismaUserRepository(prisma);
+
+export async function authMiddleware(req, res, next) {
   const authHeader = req.headers["authorization"];
 
   if (!authHeader) {
@@ -17,28 +24,30 @@ export function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Decrypt user info
-    const decryptedUser = {
-      ...decoded,
-      email: decryptDeterministic(decoded.email),
-      name: decoded.name ? decrypt(decoded.name) : undefined,
-    };
+    // Fetch user from DB using the ID from token.
+    // The repository's findById method handles the decryption logic correctly.
+    const user = await userRepository.findById(decoded.id);
 
-    req.user = decryptedUser;
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
 
-    // As requested: store the username and email in the request body
-    // Merging to avoid overwriting existing body data if any (though body is usually parsed by fastify)
+    if (user.active === false) {
+      return res.status(403).json({ message: "User account is inactive" });
+    }
+
+    req.user = user;
+
+    // Populate body for backward compatibility / controller convenience
     if (typeof req.body === "object" && req.body !== null) {
-      req.body.email = decryptedUser.email;
-      req.body.name = decryptedUser.name;
-      // Optionally add the whole user object if needed, but the requirement specifically mentioned username, email.
-      req.body.user = decryptedUser; // Helpful for some controllers
+      req.body.email = user.email;
+      req.body.name = user.name;
+      req.body.user = user;
     } else {
-      // If body is empty/null, initialize it
       req.body = {
-        email: decryptedUser.email,
-        name: decryptedUser.name,
-        user: decryptedUser,
+        email: user.email,
+        name: user.name,
+        user: user,
       };
     }
 
