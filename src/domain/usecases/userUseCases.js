@@ -349,4 +349,8 @@ export class UserUseCases {
     const user = await this.userRepository.update(id, updateData);
     return this._decryptUser(user);
   }
+  async deleteUser(id) {
+    const user = await this.userRepository.deleteUser(id);
+    return user;
+  }
 }

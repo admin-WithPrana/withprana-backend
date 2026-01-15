@@ -245,4 +245,19 @@ export class PrismaUserRepository {
       throw error;
     }
   }
+  async deleteUser(id) {
+    try {
+      // Prisma handles cascading deletes based on schema relation modes
+      // Ensure the id is parsed correctly
+      const parsedId = Number(id);
+
+      const user = await this.prisma.user.delete({
+        where: { id: parsedId },
+      });
+      return this._decryptUser(user);
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      throw error;
+    }
+  }
 }

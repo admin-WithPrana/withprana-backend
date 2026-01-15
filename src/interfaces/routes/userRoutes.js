@@ -4,6 +4,7 @@ import { PrismaUserRepository } from "../../infrastructure/databases/postgres/us
 import fastifyMultipart from "@fastify/multipart";
 import { uploadToCloudinary } from "../../infrastructure/services/cloudinaryService.js";
 import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
@@ -112,7 +113,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
     }
   });
 
-  app.delete("/:id", (request, reply) =>
+  app.delete("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
     userController.deleteUser(request, reply)
   );
 };
