@@ -48,4 +48,3 @@ export const meditationWorker = new Worker(
 meditationWorker.on('failed', (job, err) => {
   console.error(`Meditation job failed ${job.id} with error: ${err.message}`);
 });
-

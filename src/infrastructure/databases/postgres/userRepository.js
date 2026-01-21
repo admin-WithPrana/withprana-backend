@@ -1,80 +1,106 @@
+import {
+  decrypt,
+  decryptDeterministic,
+  encrypt,
+  generateUserKey,
+  encryptUserKey,
+  decryptUserKey,
+} from "../../../utils/encryption.js";
+
 export class PrismaUserRepository {
   constructor(prisma) {
     if (!prisma) {
-      throw new Error('Prisma client is required');
+      throw new Error("Prisma client is required");
     }
     this.prisma = prisma;
   }
 
+  _decryptUser(user) {
+    if (!user) return user;
+    const decrypted = { ...user };
+
+    try {
+      if (decrypted.encryptedUserKey) {
+        // New Flow: Decrypt userKey then decrypt data
+        const userKey = decryptUserKey(decrypted.encryptedUserKey);
+        if (decrypted.name) decrypted.name = decrypt(decrypted.name, userKey);
+      } else {
+        // Old Flow: Fallback to MASTER_KEY
+        if (decrypted.name) decrypted.name = decrypt(decrypted.name);
+      }
+    } catch (error) {
+      // If decryption fails, keep original or handle error
+      console.error("Decryption failed for user:", user.id, error);
+    }
+
+    if (decrypted.email)
+      decrypted.email = decryptDeterministic(decrypted.email);
+    return decrypted;
+  }
+
   async findByEmail(email) {
     try {
-      return await this.prisma.user.findUnique({
-        where: { email: email.toLowerCase() }
+      const user = await this.prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
       });
+      return this._decryptUser(user);
     } catch (error) {
-      console.error('Error finding user by email:', error);
+      console.error("Error finding user by email:", error);
       throw error;
     }
   }
 
-  // async createUser(user) {
-  //   try {
-  //      await this.prisma.user.create({ 
-  //       data: {
-  //         image: user.image,
-  //         signupMethod: user.signupMethod,
-  //         subscriptionType: user.subscriptionType,
-  //         email: user.email.toLowerCase(),
-  //         name: user.name,
-  //         password: user.password,
-  //         isVerified: user?.isVerified || false ,
-  //         active: user?.active || false
-  //       } 
-  //     });
-  //   } catch (error) {
-  //     console.error('Error creating user:', error);
-  //     throw error;
-  //   }
-  // }
   async createUser(user) {
     try {
+      // Generate per-user key
+      const userKey = generateUserKey();
+      const encryptedUserKey = encryptUserKey(userKey);
+
       const newUser = await this.prisma.user.create({
         data: {
           image: user.image,
           signupMethod: user.signupMethod,
           subscriptionType: user.subscriptionType,
           email: user.email.toLowerCase(),
-          name: user.name,
+          name: user.name ? encrypt(user.name, userKey) : null, // Encrypt with userKey
           password: user.password,
           isVerified: user?.isVerified ?? false,
           active: user?.active ?? false,
+          encryptedUserKey: encryptedUserKey, // Store the encrypted key
         },
       });
-  
-      return newUser; 
+
+      return this._decryptUser(newUser);
     } catch (error) {
       console.error("Error creating user:", error);
       throw error;
     }
   }
-  
 
   async verifyEmail(email) {
     try {
-      return await this.prisma.user.update({
+      const user = await this.prisma.user.update({
         where: { email: email.toLowerCase() },
-        data: { 
+        data: {
           isVerified: true,
-          active: true
+          active: true,
         },
       });
+      return this._decryptUser(user);
     } catch (error) {
-      console.error('Error verifying email:', error);
+      console.error("Error verifying email:", error);
       throw error;
     }
   }
 
-  async findAll({ signupMethod, subscriptionType, page = 1, limit = 10, sort, order } = {}) {
+  async findAll({
+    signupMethod,
+    subscriptionType,
+    page = 1,
+    limit = 10,
+    sort,
+    order,
+  } = {}) {
     try {
       const where = {};
       if (signupMethod) where.signupMethod = signupMethod;
@@ -91,13 +117,15 @@ export class PrismaUserRepository {
           orderBy: {
             [sort]: order?.toLowerCase() === "asc" ? "asc" : "desc",
           },
-        })
+        }),
       });
 
       const total = await this.prisma.user.count({ where });
 
       return {
-        data: users.map((user) => ({ ...user, id: Number(user.id) })),
+        data: users.map((user) =>
+          this._decryptUser({ ...user, id: Number(user.id) })
+        ),
         pagination: {
           total,
           page,
@@ -106,42 +134,129 @@ export class PrismaUserRepository {
         },
       };
     } catch (error) {
-      console.error('Error finding all users:', error);
+      console.error("Error finding all users:", error);
       throw error;
     }
   }
 
   async findById(id) {
     try {
-      return await this.prisma.user.findUnique({
-        where: { id: Number(id) }
+      const user = await this.prisma.user.findUnique({
+        where: { id: Number(id) },
       });
+      return this._decryptUser(user);
     } catch (error) {
-      console.error('Error finding user by ID:', error);
+      console.error("Error finding user by ID:", error);
       throw error;
     }
   }
 
   async update(id, data) {
     try {
-      return await this.prisma.user.update({
+      const updateData = { ...data };
+      // Handle encryption if name is being updated
+      if (updateData.name) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: Number(id) },
+        });
+        if (user) {
+          if (user.encryptedUserKey) {
+            const userKey = decryptUserKey(user.encryptedUserKey);
+            updateData.name = encrypt(updateData.name, userKey);
+          } else {
+            updateData.name = encrypt(updateData.name); // Fallback to Master Key
+          }
+        }
+      }
+
+      const user = await this.prisma.user.update({
         where: { id: Number(id) },
-        data
+        data: updateData,
       });
+      return this._decryptUser(user);
     } catch (error) {
-      console.error('Error updating user:', error);
+      console.error("Error updating user:", error);
       throw error;
     }
   }
 
   async updateUser(id, data) {
+    return this.update(id, data);
+  }
+
+  async updateUserSubscriptionType(userId, subscriptionType) {
     try {
-      return await this.prisma.user.update({
-        where: { id: Number(id) },
-        data
+      console.log(
+        `🔄 Updating user ${userId} subscription type to: ${subscriptionType}`
+      );
+
+      // Handle both BigInt and Number IDs
+      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id },
+        data: {
+          subscriptionType: subscriptionType.toUpperCase(), // Ensure consistent casing
+        },
       });
+
+      console.log(
+        `✅ User ${userId} subscription type updated to: ${updatedUser.subscriptionType}`
+      );
+      return this._decryptUser(updatedUser);
     } catch (error) {
-      console.error('Error updating user:', error);
+      console.error("❌ Error updating user subscription type:", error);
+      throw new Error(
+        `Failed to update user subscription type: ${error.message}`
+      );
+    }
+  }
+
+  // Optional: Additional helper method for subscription management
+  async getUserSubscriptionStatus(userId) {
+    try {
+      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
+
+      const user = await this.prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          email: true,
+          subscriptionType: true,
+          stripeCustomerId: true,
+          subscriptions: {
+            where: {
+              status: "ACTIVE",
+              currentPeriodEnd: {
+                gt: new Date(),
+              },
+            },
+            include: {
+              plan: true,
+            },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      });
+      return this._decryptUser(user);
+    } catch (error) {
+      console.error("Error getting user subscription status:", error);
+      throw error;
+    }
+  }
+  async deleteUser(id) {
+    try {
+      // Prisma handles cascading deletes based on schema relation modes
+      // Ensure the id is parsed correctly
+      const parsedId = Number(id);
+
+      const user = await this.prisma.user.delete({
+        where: { id: parsedId },
+      });
+      return this._decryptUser(user);
+    } catch (error) {
+      console.error("Error deleting user:", error);
       throw error;
     }
   }

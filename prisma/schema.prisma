@@ -62,6 +62,7 @@ model User {
   subscriptions    Subscription[]
   transactions     Transaction[]
   userTags         UserTag[]
+  encryptedUserKey String?
 
   @@map("users")
 }
@@ -82,12 +83,12 @@ model Meditation {
   categoryId     Int
   subcategoryId  String?
   type           String?
+  scheduledAt    DateTime?
   likedUsers     Liked[]
   meditationTags MeditationTags[]
   category       Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory    Subcategory?         @relation(fields: [subcategoryId], references: [id])
   playlistItems  PlaylistMeditation[]
-  scheduledAt    DateTime? 
 
   @@map("meditations")
 }
@@ -143,19 +144,6 @@ model Liked {
 
   @@unique([userId, meditationId])
   @@map("liked_meditations")
-}
-
-model ThoughtOfTheDay {
-  id          String        @id @default(cuid())
-  thumbnail   String
-  link        String
-  title       String
-  duration    String
-  description String
-  scheduledAt DateTime
-  status      ThoughtStatus @default(PENDING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
 }
 
 model Playlist {
@@ -252,8 +240,8 @@ model UserTag {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tagId])
-  @@index([userId])
   @@index([tagId])
+  @@index([userId])
   @@map("user_tags")
 }
 
@@ -270,6 +258,7 @@ model SubscriptionPlan {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   subscriptions Subscription[]
+  transactions  Transaction[]
 
   @@map("subscription_plans")
 }
@@ -308,6 +297,8 @@ model Transaction {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
   type                  String            @default("SUBSCRIPTION")
+  planId                String?
+  plan                  SubscriptionPlan? @relation(fields: [planId], references: [id])
   subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -323,6 +314,19 @@ model Settings {
   adminEmail     String   @unique
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model ThoughtOfTheDay {
+  id          String        @id
+  thumbnail   String
+  link        String
+  title       String
+  duration    String
+  description String
+  scheduledAt DateTime
+  status      ThoughtStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
 }
 
 enum ThoughtStatus {

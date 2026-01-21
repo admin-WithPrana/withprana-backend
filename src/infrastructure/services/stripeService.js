@@ -18,29 +18,44 @@ export class StripeService {
       });
       return customer;
     } catch (error) {
+      console.error('Stripe customer creation error:', error);
       throw new Error(`Failed to create Stripe customer: ${error.message}`);
     }
   }
 
-  async createSubscription(customerId, priceId) {
+  async getCustomer(customerId) {
     try {
-      const subscription = await this.stripe.subscriptions.create({
-        customer: customerId,
-        items: [{ price: priceId }],
-        payment_behavior: 'default_incomplete',
-        payment_settings: { save_default_payment_method: 'on_subscription' },
-        expand: ['latest_invoice.payment_intent'],
-      });
-      return subscription;
+      const customer = await this.stripe.customers.retrieve(customerId);
+      return customer;
     } catch (error) {
-      throw new Error(`Failed to create subscription: ${error.message}`);
+      if (error.code === 'resource_missing') {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async createOrGetCustomer(user) {
+    try {
+      if (user.stripeCustomerId) {
+        const existingCustomer = await this.getCustomer(user.stripeCustomerId);
+        if (existingCustomer && !existingCustomer.deleted) {
+          return existingCustomer;
+        }
+      }
+
+      const customer = await this.createCustomer(user);
+      return customer;
+    } catch (error) {
+      console.error('Error in createOrGetCustomer:', error);
+      throw error;
     }
   }
 
   async createPaymentIntent(amount, currency = 'usd', customerId = null) {
     try {
       const paymentIntent = await this.stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
+        amount: Math.round(amount * 100),
         currency,
         customer: customerId,
         automatic_payment_methods: {
