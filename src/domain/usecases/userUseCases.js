@@ -1,192 +1,11 @@
-// import { User, OTP } from "../entities/user.js";
-// import jwt from "jsonwebtoken";
-
-// export class UserUseCases {
-//   constructor(userRepo, otpRepository, mailer) {
-//     this.userRepository = userRepo;
-//     this.otpRepository = otpRepository;
-//     this.mailer = mailer;
-//   }
-
-//   subscriptionType = ['free', 'premium', 'enterprise'];
-//   signupSelector(type) {
-//     let subType = "email"
-//     if(type=== 1){
-//       subType="email"
-//     }else if(type===2){  
-//       subType="google"
-//     }else if(type===3){  
-//       subType="apple"
-//     }
-//     return subType;
-//   }
-
-//   async registerUser(userData) {
-//     const user = new User({
-//       email: userData.email,
-//       name: userData.name,
-//       image:userData.image,
-//       oauth: userData.oauth,
-//       signupMethod: this.signupSelector(Number(userData.method)),
-//       subscriptionType: 'free'
-//     });
-
-//     user.validate();
-
-//     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-//     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-//     const otp = new OTP({
-//       email: user.email,
-//       otpcode: otpCode,
-//       expires_at: expiresAt,
-//       isvalid: true,
-//     });
-
-//     const existingUser = await this.userRepository.findByEmail(user.email);
-
-//     if (existingUser) {
-//       if (existingUser.active === true) {
-//         await this.otpRepository.createOTP(otp);
-//         await this.sendOTPEmail(existingUser.email, otpCode);
-//         return existingUser;
-//       } else {
-//         await this.otpRepository.createOTP(otp);
-//         await this.sendOTPEmail(existingUser.email, otpCode);
-//         return existingUser;
-//       }
-//     }
-
-//     const createdUser = await this.userRepository.createUser(user);
-
-//     await this.otpRepository.createOTP(otp);
-//     await this.sendOTPEmail(user.email, otpCode);
-
-//     return createdUser;
-//   }
-
-//   async resendOTP(email) {
-//     const user = await this.userRepository.findByEmail(email);
-
-//     if (!user) {
-//       throw new Error("User not found");
-//     }
-
-//     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-//     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-//     const otp = new OTP({
-//       email: user.email,
-//       otpcode: otpCode,
-//       expires_at: expiresAt,
-//       isvalid: true,
-//     });
-
-//     await this.otpRepository.createOTP(otp);
-
-//     await this.sendOTPEmail(user.email, otpCode);
-
-//     return { success: true };
-//   }
-
-//   async verifyUser(email, otpCode) {
-//     const otp = await this.otpRepository.findOTPByEmail(email);
-
-//     if (!otp || otp.otpCode !== otpCode) {
-//       throw new Error("Invalid OTP");
-//     }
-
-//     if (!otp.isValid) {
-//       await this.otpRepository.updateOTP(email, false);
-//       throw new Error("OTP has expired");
-//     }
-
-//     const user = await this.userRepository.verifyEmail(email);
-
-//     await this.otpRepository.updateOTP(email, false);
-  
-//     const token = jwt.sign(
-//       { id: user.id, email: user.email,name:user?.name},  
-//       process.env.JWT_SECRET,            
-//       { expiresIn: "1h" }     
-//     );
-  
-//     return {
-//       success: true,
-//       token,
-//       message:"Otp verified successfull"
-//     };
-//   }
-
-//   async sendOTPEmail(email, otpCode) {
-//     const mailOptions = {
-//       from: '"Test App" <no-reply@yourapp.com>',
-//       to: email,
-//       subject: "OTP for verification",
-//       text: `Your OTP is: ${otpCode}`,
-//       html: `<p>Your OTP is: <strong>${otpCode}</strong></p>`,
-//     };
-
-//     await this.mailer.sendMail(mailOptions);
-//   }
-
-//   async getUsers(filters) {
-//   return this.userRepository.findAll(filters);
-// }
-
-
-//   async getUserById(id) {
-//     return this.userRepository.findById(id);
-//   }
-
-//   async deactivateUser(id) {
-//     return this.userRepository.update(id, { active: false });
-//   }
-
-//   async activateUser(id) {
-//     return this.userRepository.update(id, { active: true });
-//   }
-
-//   async login(email) {
-//     try {
-//       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-//       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-//       const otp = new OTP({
-//         email: email,
-//         otpcode: otpCode,
-//         expires_at: expiresAt,
-//         isvalid: true,
-//       });
-
-//       const existingUser = await this.userRepository.findByEmail(email);
-
-//       if (existingUser) {
-//         if (existingUser.active === true) {
-//           await this.otpRepository.createOTP(otp);
-//           await this.sendOTPEmail(existingUser.email, otpCode);
-//           return {success:true,message:"Otp shared to your email"}
-//         }else{
-//           return {success:false,message:"Login blocked by admin"}
-//         }
-//       }
-
-//       return {success:false,message:"No user found"}
-//     } catch (error) {
-//       console.error(error);
-//     }
-//   }
-
-//   async getUserById(id) {
-//     return this.userRepository.findById(id);
-//   }
-
-//   async updateUser(id, data) {
-//     return this.userRepository.update(id, data);
-//   }
-// }
 import { User, OTP } from "../entities/user.js";
 import jwt from "jsonwebtoken";
+import {
+  encrypt,
+  decrypt,
+  encryptDeterministic,
+  decryptDeterministic,
+} from "../../utils/encryption.js";
 
 export class UserUseCases {
   constructor(userRepo, otpRepository, mailer) {
@@ -195,106 +14,29 @@ export class UserUseCases {
     this.mailer = mailer;
   }
 
-  subscriptionType = ['free', 'premium', 'enterprise'];
-  
+  subscriptionType = ["free", "premium", "enterprise"];
+
   signupSelector(type) {
-    let subType = "email"
-    if(type === 1){
-      subType="email"
-    }else if(type === 2){  
-      subType="google"
-    }else if(type === 3){  
-      subType="apple"
+    let subType = "email";
+    if (type === 1) {
+      subType = "email";
+    } else if (type === 2) {
+      subType = "google";
+    } else if (type === 3) {
+      subType = "apple";
     }
     return subType;
   }
 
-  // async registerUser(userData) {
-  //   const user = new User({
-  //     email: userData.email,
-  //     name: userData.name,
-  //     image: userData.image,
-  //     oauth: userData.oauth,
-  //     signupMethod: this.signupSelector(Number(userData.method)),
-  //     subscriptionType: 'free'
-  //   });
+  _decryptUser(user) {
+    if (!user) return user;
+    const decrypted = { ...user };
+    if (decrypted.name) decrypted.name = decrypt(decrypted.name);
+    if (decrypted.email)
+      decrypted.email = decryptDeterministic(decrypted.email);
+    return decrypted;
+  }
 
-  //   user.validate();
-
-  //   if (JSON.parse(userData.oauth) == true) {
-  //     const existingUser = await this.userRepository.findByEmail(user.email);
-
-  //     if (existingUser) {
-  //       if (existingUser.active === false) {
-  //         throw new Error("Login blocked by admin");
-  //       }
-        
-
-  //       const updatedUser = await this.userRepository.update(existingUser.id, {
-  //         name: userData.name,
-  //         image: userData.image,
-  //         signupMethod: this.signupSelector(Number(userData.method))
-  //       });
-
-  //       const token = this.generateToken(updatedUser);
-  //       return {
-  //         user: updatedUser,
-  //         token,
-  //         oauth: true,
-  //         message: "OAuth registration successful"
-  //       };
-  //     }
-
-  //     user.isVerified = true
-  //     user.active = true
-  //     const createdUser = await this.userRepository.createUser(user);
-  //     const token = this.generateToken(createdUser);
-      
-  //     return {
-  //       user: createdUser,
-  //       token,
-  //       oauth: true,
-  //       message: "OAuth registration successful"
-  //     };
-  //   }
-
-
-  //   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  //   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-  //   const otp = new OTP({
-  //     email: user.email,
-  //     otpcode: otpCode,
-  //     expires_at: expiresAt,
-  //     isvalid: true,
-  //   });
-
-  //   const existingUser = await this.userRepository.findByEmail(user.email);
-
-  //   if (existingUser && existingUser.oauth != true) {
-  //     if (existingUser.active === false) {
-  //       throw new Error("Login blocked by admin");
-  //     }
-
-  //     await this.otpRepository.createOTP(otp);
-  //     await this.sendOTPEmail(existingUser.email, otpCode);
-  //     return {
-  //       user: existingUser,
-  //       oauth: false,
-  //       message: "OTP sent for verification"
-  //     };
-  //   }
-
-  //   const createdUser = await this.userRepository.createUser(user);
-  //   await this.otpRepository.createOTP(otp);
-  //   await this.sendOTPEmail(user.email, otpCode);
-
-  //   return {
-  //     user: createdUser,
-  //     oauth: false,
-  //     message: "OTP sent for verification"
-  //   };
-  // }
   async registerUser(userData) {
     const user = new User({
       email: userData.email,
@@ -302,95 +44,149 @@ export class UserUseCases {
       image: userData.image,
       oauth: userData.oauth,
       signupMethod: this.signupSelector(Number(userData.method)),
-      subscriptionType: 'free'
+      subscriptionType: "free",
     });
-  
+
     user.validate();
-  
-    const existingUser = await this.userRepository.findByEmail(user.email);
-  
+
+    // Check using deterministic encrypted email
+    const encryptedEmail = encryptDeterministic(user.email);
+    let existingUser = await this.userRepository.findByEmail(encryptedEmail);
+    if (existingUser) existingUser = this._decryptUser(existingUser);
 
     if (existingUser) {
-      if (JSON.parse(userData.oauth) && existingUser.signupMethod === "email" && existingUser.active !== true) {
+      if (
+        JSON.parse(userData.oauth) &&
+        existingUser.signupMethod === "email" &&
+        existingUser.active !== true
+      ) {
         throw new Error("This email is already registered. Please login");
       }
-      if (!JSON.parse(userData.oauth) && existingUser.signupMethod !== "email" && existingUser.active !== true) {
-        throw new Error("This email is already registered with OAuth. Please login with OAuth.");
+      if (
+        !JSON.parse(userData.oauth) &&
+        existingUser.signupMethod !== "email" &&
+        existingUser.active !== true
+      ) {
+        throw new Error(
+          "This email is already registered with OAuth. Please login with OAuth.",
+        );
       }
     }
-  
+
     if (JSON.parse(userData.oauth) == true) {
       if (existingUser) {
         if (existingUser.active === false) {
-          throw new Error("Login blocked by admin");
+          if (existingUser.systemDeactivated) {
+            await this.userRepository.reactivateUser(existingUser.id);
+          } else {
+            throw new Error("Login blocked by admin");
+          }
         }
-  
-        const updatedUser = await this.userRepository.update(existingUser.id, {
-          name: userData.name,
+
+        // Encrypt name before updating
+        const updateData = {
+          name: userData.name ? userData.name : undefined,
           image: userData.image,
-          signupMethod: this.signupSelector(Number(userData.method))
-        });
-  
+          signupMethod: this.signupSelector(Number(userData.method)),
+        };
+        // Remove undefined keys
+        Object.keys(updateData).forEach(
+          (key) => updateData[key] === undefined && delete updateData[key],
+        );
+
+        let updatedUser = await this.userRepository.update(
+          existingUser.id,
+          updateData,
+        );
+        updatedUser = this._decryptUser(updatedUser);
+        await this.userRepository.updateLastLogin(updatedUser.id);
+
         const token = this.generateToken(updatedUser);
         return {
           user: updatedUser,
           token,
           oauth: true,
-          message: "Login successful"
+          message: "Login successful",
         };
       }
-  
+
       user.isVerified = true;
       user.active = true;
-      const createdUser = await this.userRepository.createUser(user);
+
+      const userToSave = {
+        ...user,
+        name: user.name,
+        email: encryptedEmail,
+      };
+
+      let createdUser = await this.userRepository.createUser(userToSave);
+      createdUser = this._decryptUser(createdUser);
+      await this.userRepository.updateLastLogin(createdUser.id);
+
       const token = this.generateToken(createdUser);
-  
+
       return {
         user: createdUser,
         token,
         oauth: true,
-        message: "Registration successful"
+        message: "Registration successful",
       };
     }
-  
+
     // Non-OAuth flow
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-  
+
+    // Store OTP with encrypted email
     const otp = new OTP({
-      email: user.email,
+      email: encryptedEmail,
       otpcode: otpCode,
       expires_at: expiresAt,
       isvalid: true,
     });
-  
+
     if (existingUser) {
       if (existingUser.active === false) {
-        throw new Error("Login blocked by admin");
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          throw new Error("Login blocked by admin");
+        }
       }
-  
+
       await this.otpRepository.createOTP(otp);
-      await this.sendOTPEmail(existingUser.email, otpCode);
+      // Send email to plain email
+      await this.sendOTPEmail(user.email, otpCode);
       return {
         user: existingUser,
         oauth: false,
-        message: "OTP sent for verification"
+        message: "OTP sent for verification",
       };
     }
-  
-    const createdUser = await this.userRepository.createUser(user);
+
+    const userToSave = {
+      ...user,
+      name: user.name,
+      email: encryptedEmail,
+    };
+
+    let createdUser = await this.userRepository.createUser(userToSave);
+    createdUser = this._decryptUser(createdUser);
+
     await this.otpRepository.createOTP(otp);
     await this.sendOTPEmail(user.email, otpCode);
-  
+
     return {
       user: createdUser,
       oauth: false,
-      message: "OTP sent for verification"
+      message: "OTP sent for verification",
     };
-  }  
+  }
 
   async resendOTP(email) {
-    const user = await this.userRepository.findByEmail(email);
+    const encryptedEmail = encryptDeterministic(email);
+    let user = await this.userRepository.findByEmail(encryptedEmail);
+    if (user) user = this._decryptUser(user);
 
     if (!user) {
       throw new Error("User not found");
@@ -404,7 +200,7 @@ export class UserUseCases {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
     const otp = new OTP({
-      email: user.email,
+      email: encryptedEmail,
       otpcode: otpCode,
       expires_at: expiresAt,
       isvalid: true,
@@ -417,96 +213,93 @@ export class UserUseCases {
   }
 
   async verifyUser(email, otpCode) {
-    const user = await this.userRepository.findByEmail(email);
+    const encryptedEmail = encryptDeterministic(email);
+    let user = await this.userRepository.findByEmail(encryptedEmail);
+    if (user) user = this._decryptUser(user);
 
     if (!user) {
       throw new Error("User not found");
     }
 
-    // Skip OTP verification for OAuth users
     if (user.oauth === true) {
       const token = this.generateToken(user);
       return {
         success: true,
         token,
         oauth: true,
-        message: "OAuth user verified successfully"
+        message: "OAuth user verified successfully",
       };
     }
 
-    // Regular OTP verification for non-OAuth users
-    const otp = await this.otpRepository.findOTPByEmail(email);
+    const otp = await this.otpRepository.findOTPByEmail(encryptedEmail);
 
     if (!otp || otp.otpCode !== otpCode) {
       throw new Error("Invalid OTP");
     }
 
     if (!otp.isValid) {
-      await this.otpRepository.updateOTP(email, false);
+      await this.otpRepository.updateOTP(encryptedEmail, false);
       throw new Error("OTP has expired");
     }
 
-    const verifiedUser = await this.userRepository.verifyEmail(email);
-    await this.otpRepository.updateOTP(email, false);
-  
+    let verifiedUser = await this.userRepository.verifyEmail(encryptedEmail);
+    verifiedUser = this._decryptUser(verifiedUser);
+
+    await this.otpRepository.updateOTP(encryptedEmail, false);
+    await this.userRepository.updateLastLogin(verifiedUser.id);
+
     const token = this.generateToken(verifiedUser);
-  
+
     return {
       success: true,
       token,
       oauth: false,
-      message: "OTP verified successfully"
+      message: "OTP verified successfully",
     };
   }
 
-  async login(email,oauth) {
+  async login(email, oauth) {
     try {
-      const existingUser = await this.userRepository.findByEmail(email);
+      const encryptedEmail = encryptDeterministic(email);
+      let existingUser = await this.userRepository.findByEmail(encryptedEmail);
+      if (existingUser) existingUser = this._decryptUser(existingUser);
 
       if (!existingUser) {
         return { success: false, message: "No user found" };
       }
 
       if (existingUser.active === false) {
-        return { success: false, message: "Login blocked by admin" };
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          return { success: false, message: "Login blocked by admin" };
+        }
       }
 
       if (["google", "apple"].includes(existingUser.signupMethod)) {
         return {
           success: false,
-          message: `This email is linked with ${existingUser.signupMethod} sign-in. Please use ${existingUser.signupMethod} to log in.`
+          message: `This email is linked with ${existingUser.signupMethod} sign-in. Please use ${existingUser.signupMethod} to log in.`,
         };
       }
-      
 
-      // if (existingUser.signupMethod !== "email" && oauth == true) {
-      //   const token = this.generateToken(existingUser);
-      //   return {
-      //     success: true,
-      //     token,
-      //     // oauth: true,
-      //     message: "Login successful"
-      //   };
-      // }
-
-      // Regular email login flow
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
       const otp = new OTP({
-        email: email,
+        email: encryptedEmail,
         otpcode: otpCode,
         expires_at: expiresAt,
         isvalid: true,
       });
 
       await this.otpRepository.createOTP(otp);
-      await this.sendOTPEmail(existingUser.email, otpCode);
-      
+      await this.sendOTPEmail(email, otpCode); // use plain email
+
       return {
         success: true,
         oauth: false,
-        message: "OTP sent to your email"
+        message: "OTP sent to your email",
       };
     } catch (error) {
       console.error(error);
@@ -514,16 +307,15 @@ export class UserUseCases {
     }
   }
 
-  // Helper method to generate JWT token
   generateToken(user) {
     return jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
-        name: user?.name 
-      },  
-      process.env.JWT_SECRET,            
-      { expiresIn: "1h" }     
+      {
+        id: user.id,
+        email: encryptDeterministic(user.email),
+        name: user.name ? encrypt(user.name) : undefined,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
     );
   }
 
@@ -540,22 +332,40 @@ export class UserUseCases {
   }
 
   async getUsers(filters) {
-    return this.userRepository.findAll(filters);
+    const users = await this.userRepository.findAll(filters);
+    // findAll returns { data: [], pagination: {} }
+    if (users && users.data) {
+      users.data = users.data.map((u) => this._decryptUser(u));
+    }
+    return users;
   }
 
   async getUserById(id) {
-    return this.userRepository.findById(id);
+    const user = await this.userRepository.findById(id);
+    return this._decryptUser(user);
   }
 
   async deactivateUser(id) {
-    return this.userRepository.update(id, { active: false });
+    const user = await this.userRepository.update(id, { active: false });
+    return this._decryptUser(user);
   }
 
   async activateUser(id) {
-    return this.userRepository.update(id, { active: true });
+    const user = await this.userRepository.update(id, { active: true });
+    return this._decryptUser(user);
   }
 
   async updateUser(id, data) {
-    return this.userRepository.update(id, data);
+    const updateData = { ...data };
+    if (updateData.name) updateData.name = updateData.name;
+    if (updateData.email)
+      updateData.email = encryptDeterministic(updateData.email);
+
+    const user = await this.userRepository.update(id, updateData);
+    return this._decryptUser(user);
+  }
+  async deleteUser(id) {
+    const user = await this.userRepository.deleteUser(id);
+    return user;
   }
 }

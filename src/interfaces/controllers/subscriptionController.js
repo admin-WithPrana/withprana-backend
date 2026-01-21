@@ -119,12 +119,25 @@ export class SubscriptionController {
 
   async getPlans(request, reply) {
     try {
-      const plans = await this.subscriptionUseCases.getSubscriptionPlans();
-
-      return reply.code(200).send({
+      const plans = await this.subscriptionUseCases.getSubscriptionPlans(request.user);
+      
+      if(plans?.isSubscribed){
+        const planData = {
+          plan: plans?.subscription?.plan?.name,
+          renewalDate: plans?.subscription?.currentPeriodEnd,
+          nextBillingAmount: plans?.subscription?.plan?.price,
+          currency: plans?.subscription?.plan?.currency,
+        }
+        return reply.code(200).send({
+          success: true,
+          data: plans.subscription,
+        }); 
+      }else{
+        return reply.code(200).send({
         success: true,
         data: plans,
       });
+      }
     } catch (error) {
       return reply.code(400).send({
         success: false,

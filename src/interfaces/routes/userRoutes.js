@@ -1,106 +1,128 @@
-import { UserController } from '../controllers/userController.js';
-import { PostgresOTPRepository } from '../../infrastructure/databases/postgres/otpRepository.js';
+import { UserController } from "../controllers/userController.js";
+import { PostgresOTPRepository } from "../../infrastructure/databases/postgres/otpRepository.js";
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
-import fastifyMultipart from '@fastify/multipart';
+import fastifyMultipart from "@fastify/multipart";
+import { uploadToCloudinary } from "../../infrastructure/services/cloudinaryService.js";
+import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
-    throw new Error('Prisma client is not properly initialized');
+    throw new Error("Prisma client is not properly initialized");
   }
 
   const otpRepo = new PostgresOTPRepository(prismaRepository.prisma);
   const userRepo = new PrismaUserRepository(prismaRepository.prisma);
 
-  const userController = new UserController(
-    userRepo,
-    otpRepo,
-    mailer
-  );
+  const userController = new UserController(userRepo, otpRepo, mailer);
 
   app.register(fastifyMultipart, {
     limits: {
-      fileSize: 10 * 1024 * 1024, 
-      files: 1
+      fileSize: 10 * 1024 * 1024,
+      files: 1,
     },
-    attachFieldsToBody: true
+    attachFieldsToBody: true,
   });
 
-  app.post('/register', async (request, reply) => {
-  try {
-    const { name, email, profilePicture, oauth, method } = request.body;
-    
-    let profilePictureUrl = null;
-    
-    if (typeof profilePicture.value === 'string' && profilePicture.value.trim() !== '') {
-      profilePictureUrl = profilePicture.value;
-    }
-    
-    if (profilePicture?.file) {
-      let image=uploadToS3(profilePicture,"images")
-      profilePictureUrl=image[0]
-    }
-
-    const payload = {
-      name: typeof name === 'object' ? name.value : name,
-      email: typeof email === 'object' ? email.value : email,
-      oauth: typeof oauth === 'object' ? oauth.value : oauth,
-      method: typeof method === 'object' ? method.value : method,
-      image: profilePictureUrl
-    };
-    
-    await userController.register({ ...request, body: payload }, reply);
-
-  } catch (error) {
-    console.error('User registration error:', error);
-    reply.status(500).send({ 
-      error: 'Failed to register user', 
-      details: error.message 
-    });
-  }
-});
-
-  app.post('/verify', (request, reply) => userController.verify(request, reply));
-  app.post('/resend-otp', (request, reply) => userController.resendOTP(request, reply));
-  app.post('/login', (request, reply) => userController.login(request, reply));
-  
-  app.get('/:id', (request, reply) => userController.getUserById(request, reply));
-
-
-  app.patch('/:id', async (request, reply) => {
+  app.post("/register", async (request, reply) => {
     try {
-      const { id } = request.params;
-      const { name, profilePicture} = request.body;
-      
-      let profilePictureUrl = undefined;
+      const { name, email, profilePicture, oauth, method } = request.body;
 
-      if (profilePicture) {
-        if (profilePicture?.file) {
+      let profilePictureUrl = null;
 
-          let image=uploadToS3(profilePicture,"images")
-          profilePictureUrl=image[0]
-        } else if (typeof profilePicture === 'string' && profilePicture.trim() !== '') {
-          profilePictureUrl = profilePicture;
-        }
+      if (
+        profilePicture &&
+        typeof profilePicture.value === "string" &&
+        profilePicture.value.trim() !== ""
+      ) {
+        profilePictureUrl = profilePicture.value;
+      }
+
+      if (profilePicture?.file) {
+        let image = uploadToS3(profilePicture, "images");
+        profilePictureUrl = image[0];
       }
 
       const payload = {
-        name: typeof name === 'object' ? name.value : name
+        name: name && typeof name === "object" ? name.value : name,
+        email: email && typeof email === "object" ? email.value : email,
+        oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
+        method: method && typeof method === "object" ? method.value : method,
+        image: profilePictureUrl,
       };
 
-      if(profilePictureUrl !== ""){
-        payload.image = profilePictureUrl
-      }
-
-      await userController.updateUser({ ...request, params: { id }, body: payload }, reply);
-
+      await userController.register({ ...request, body: payload }, reply);
     } catch (error) {
-      console.error('User update error:', error);
-      reply.status(500).send({ 
-        error: 'Failed to update user', 
-        details: error.message 
+      console.error("User registration error:", error);
+      reply.status(500).send({
+        error: "Failed to register user",
+        details: error.message,
       });
     }
   });
 
-  app.delete('/:id', (request, reply) => userController.deleteUser(request, reply));
+  app.post("/verify", (request, reply) =>
+    userController.verify(request, reply),
+  );
+  app.post("/resend-otp", (request, reply) =>
+    userController.resendOTP(request, reply),
+  );
+  app.post("/login", (request, reply) => userController.login(request, reply));
+
+  app.get("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.getUserById(request, reply),
+  );
+
+  app.patch(
+    "/:id",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const { name, profilePicture } = request.body;
+
+        // ... existing logic will be handled by controller, passing request
+        // But wait, the route handler here has logic inside it.
+        // The original code has logic inside the route handler.
+        // I should preserve that logic but wrap it in auth middleware.
+
+        let profilePictureUrl = undefined;
+
+        if (profilePicture) {
+          if (profilePicture?.file) {
+            let image = uploadToS3(profilePicture, "images");
+            profilePictureUrl = image[0];
+          } else if (
+            typeof profilePicture === "string" &&
+            profilePicture.trim() !== ""
+          ) {
+            profilePictureUrl = profilePicture;
+          }
+        }
+
+        const payload = {
+          name: typeof name === "object" ? name.value : name,
+        };
+
+        if (profilePictureUrl !== "") {
+          payload.image = profilePictureUrl;
+        }
+
+        await userController.updateUser(
+          { ...request, params: { id }, body: payload, user: request.user }, // Ensure user is passed if attached by middleware
+          reply,
+        );
+      } catch (error) {
+        console.error("User update error:", error);
+        reply.status(500).send({
+          error: "Failed to update user",
+          details: error.message,
+        });
+      }
+    },
+  );
+
+  app.delete("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.deleteUser(request, reply),
+  );
 };

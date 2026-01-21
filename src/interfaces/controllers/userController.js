@@ -26,7 +26,7 @@
 //     try {
 //       const verifyDTO = new VerifyUserDTO(request.body);
 //      const result =  await this.userUseCases.verifyUser(verifyDTO.email, verifyDTO.otp);
-      
+
 //      if(result.success){
 //       return reply.code(200).send({
 //         success: true,
@@ -64,7 +64,7 @@
 //     try {
 //       const userDTO = new CreateUserDTO(request.body);
 //       const result = await this.userUseCases.login(userDTO.email);
-  
+
 //       return reply.code(result.success ? 200 : 400).send(result);
 //     } catch (error) {
 //       return reply.code(500).send({
@@ -73,7 +73,7 @@
 //       });
 //     }
 //   }
-  
+
 //   async getUserById(request, reply) {
 //     try {
 //       const { id } = request.params;
@@ -102,8 +102,8 @@
 //     }
 //   }
 // }
-import { UserUseCases } from '../../domain/usecases/userUseCases.js';
-import { CreateUserDTO, VerifyUserDTO } from '../dtos/userDTO.js';
+import { UserUseCases } from "../../domain/usecases/userUseCases.js";
+import { CreateUserDTO, VerifyUserDTO } from "../dtos/userDTO.js";
 
 export class UserController {
   constructor(userRepository, otpRepository, mailer) {
@@ -114,7 +114,7 @@ export class UserController {
     try {
       const userDTO = new CreateUserDTO(request.body);
       const result = await this.userUseCases.registerUser(userDTO);
-      
+
       if (JSON.parse(result.oauth)) {
         return reply.code(201).send({
           success: true,
@@ -134,7 +134,7 @@ export class UserController {
     } catch (error) {
       return reply.code(400).send({
         success: false,
-        message: error.message
+        message: error.message,
       });
     }
   }
@@ -142,18 +142,21 @@ export class UserController {
   async verify(request, reply) {
     try {
       const verifyDTO = new VerifyUserDTO(request.body);
-      const result = await this.userUseCases.verifyUser(verifyDTO.email, verifyDTO.otp);
-      
+      const result = await this.userUseCases.verifyUser(
+        verifyDTO.email,
+        verifyDTO.otp,
+      );
+
       return reply.code(200).send({
         success: result.success,
         message: result.message,
         token: result.token,
-        oauth: result.oauth
+        oauth: result.oauth,
       });
     } catch (error) {
       return reply.code(400).send({
         success: false,
-        message: error.message
+        message: error.message,
       });
     }
   }
@@ -162,15 +165,15 @@ export class UserController {
     try {
       const userDTO = new CreateUserDTO(request.body);
       const result = await this.userUseCases.resendOTP(userDTO.email);
-      
+
       return reply.code(200).send({
         success: true,
-        message: result.message
+        message: result.message,
       });
     } catch (error) {
       return reply.code(400).send({
         success: false,
-        message: error.message
+        message: error.message,
       });
     }
   }
@@ -178,42 +181,69 @@ export class UserController {
   async login(request, reply) {
     try {
       const userDTO = new CreateUserDTO(request.body);
-      const result = await this.userUseCases.login(userDTO.email,userDTO.oauth);
-  
+      const result = await this.userUseCases.login(
+        userDTO.email,
+        userDTO.oauth,
+      );
+
       // Handle different response structures based on success and OAuth status
       if (result.success) {
         return reply.code(200).send({
           success: true,
           message: result.message,
           token: result.token,
-          oauth: result.oauth
+          oauth: result.oauth,
         });
       } else {
         return reply.code(400).send({
           success: false,
-          message: result.message
+          message: result.message,
         });
       }
     } catch (error) {
       return reply.code(500).send({
         success: false,
-        message: error.message || "Internal server error"
+        message: error.message || "Internal server error",
       });
     }
   }
-  
+
   async getUserById(request, reply) {
     try {
       const { id } = request.params;
+      const requestingUser = request.user;
+
       const user = await this.userUseCases.getUserById(id);
-      return reply.code(200).send({ 
-        success: true, 
-        user 
+
+      if (!user) {
+        return reply
+          .code(404)
+          .send({ success: false, message: "User not found" });
+      }
+
+      // Authorization & Privacy Logic
+      // If the requesting user is NOT the owner, filter private data
+      if (!requestingUser || String(requestingUser.id) !== String(user.id)) {
+        return reply.code(200).send({
+          success: true,
+          user: {
+            id: user.id,
+            name: user.name,
+            image: user.image,
+            // Do NOT expose email, subscription details, etc.
+          },
+        });
+      }
+
+      // If owner, return full data
+      return reply.code(200).send({
+        success: true,
+        user,
       });
     } catch (error) {
-      return reply.code(500).send({ 
-        success: false, 
-        message: error.message 
+      return reply.code(500).send({
+        success: false,
+        message: error.message,
       });
     }
   }
@@ -222,17 +252,28 @@ export class UserController {
     try {
       const userDTO = new CreateUserDTO(request.body);
       const { id } = request.params;
+      const requestingUser = request.user || request.body.user; // Use request.user from middleware if available
+
+      // Authorization Check: Ensure user updates their own profile
+      if (!requestingUser || String(requestingUser.id) !== String(id)) {
+        return reply.code(403).send({
+          success: false,
+          message: "Unauthorized: You can only update your own profile",
+        });
+      }
+
+      userDTO.id = id;
       const user = await this.userUseCases.updateUser(id, userDTO);
-      
+
       return reply.code(200).send({
         success: true,
-        message: 'User updated successfully',
-        user
+        message: "User updated successfully",
+        user,
       });
     } catch (error) {
       return reply.code(400).send({
         success: false,
-        message: error.message
+        message: error.message,
       });
     }
   }
@@ -243,12 +284,12 @@ export class UserController {
       const users = await this.userUseCases.getUsers(filters);
       return reply.code(200).send({
         success: true,
-        users
+        users,
       });
     } catch (error) {
       return reply.code(500).send({
         success: false,
-        message: error.message
+        message: error.message,
       });
     }
   }
@@ -259,13 +300,13 @@ export class UserController {
       const user = await this.userUseCases.deactivateUser(id);
       return reply.code(200).send({
         success: true,
-        message: 'User deactivated successfully',
-        user
+        message: "User deactivated successfully",
+        user,
       });
     } catch (error) {
       return reply.code(400).send({
         success: false,
-        message: error.message
+        message: error.message,
       });
     }
   }
@@ -276,13 +317,40 @@ export class UserController {
       const user = await this.userUseCases.activateUser(id);
       return reply.code(200).send({
         success: true,
-        message: 'User activated successfully',
-        user
+        message: "User activated successfully",
+        user,
       });
     } catch (error) {
       return reply.code(400).send({
         success: false,
-        message: error.message
+        message: error.message,
+      });
+    }
+  }
+  async deleteUser(request, reply) {
+    try {
+      const { id } = request.params;
+
+      // Verify that the authenticated user is deleting their own account
+      if (!request.user || String(request.user.id) !== String(id)) {
+        // Allow admin override if needed, but for now strict self-deletion
+        return reply.code(403).send({
+          success: false,
+          message: "Unauthorized: You can only delete your own account",
+        });
+      }
+
+      const user = await this.userUseCases.deleteUser(id);
+
+      return reply.code(200).send({
+        success: true,
+        message: "User deleted successfully",
+        // user // Do not return user data on delete usually, but for confirmation maybe id
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
       });
     }
   }
