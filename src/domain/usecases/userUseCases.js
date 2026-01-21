@@ -68,7 +68,7 @@ export class UserUseCases {
         existingUser.active !== true
       ) {
         throw new Error(
-          "This email is already registered with OAuth. Please login with OAuth."
+          "This email is already registered with OAuth. Please login with OAuth.",
         );
       }
     }
@@ -76,7 +76,11 @@ export class UserUseCases {
     if (JSON.parse(userData.oauth) == true) {
       if (existingUser) {
         if (existingUser.active === false) {
-          throw new Error("Login blocked by admin");
+          if (existingUser.systemDeactivated) {
+            await this.userRepository.reactivateUser(existingUser.id);
+          } else {
+            throw new Error("Login blocked by admin");
+          }
         }
 
         // Encrypt name before updating
@@ -87,14 +91,15 @@ export class UserUseCases {
         };
         // Remove undefined keys
         Object.keys(updateData).forEach(
-          (key) => updateData[key] === undefined && delete updateData[key]
+          (key) => updateData[key] === undefined && delete updateData[key],
         );
 
         let updatedUser = await this.userRepository.update(
           existingUser.id,
-          updateData
+          updateData,
         );
         updatedUser = this._decryptUser(updatedUser);
+        await this.userRepository.updateLastLogin(updatedUser.id);
 
         const token = this.generateToken(updatedUser);
         return {
@@ -116,6 +121,7 @@ export class UserUseCases {
 
       let createdUser = await this.userRepository.createUser(userToSave);
       createdUser = this._decryptUser(createdUser);
+      await this.userRepository.updateLastLogin(createdUser.id);
 
       const token = this.generateToken(createdUser);
 
@@ -141,7 +147,11 @@ export class UserUseCases {
 
     if (existingUser) {
       if (existingUser.active === false) {
-        throw new Error("Login blocked by admin");
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          throw new Error("Login blocked by admin");
+        }
       }
 
       await this.otpRepository.createOTP(otp);
@@ -236,6 +246,7 @@ export class UserUseCases {
     verifiedUser = this._decryptUser(verifiedUser);
 
     await this.otpRepository.updateOTP(encryptedEmail, false);
+    await this.userRepository.updateLastLogin(verifiedUser.id);
 
     const token = this.generateToken(verifiedUser);
 
@@ -258,7 +269,11 @@ export class UserUseCases {
       }
 
       if (existingUser.active === false) {
-        return { success: false, message: "Login blocked by admin" };
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          return { success: false, message: "Login blocked by admin" };
+        }
       }
 
       if (["google", "apple"].includes(existingUser.signupMethod)) {
@@ -300,7 +315,7 @@ export class UserUseCases {
         name: user.name ? encrypt(user.name) : undefined,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "1h" },
     );
   }
 

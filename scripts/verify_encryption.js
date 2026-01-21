@@ -8,9 +8,11 @@ BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
-const prisma = new PrismaClient();
-const userRepository = new PrismaUserRepository(prisma);
-const otpRepository = new PostgresOTPRepository(prisma);
+import {
+  initializeDatabaseConnections,
+  prisma,
+  closeDatabaseConnections,
+} from "../src/config/database.js";
 
 const mockMailer = {
   sendMail: async (options) => {
@@ -18,16 +20,20 @@ const mockMailer = {
   },
 };
 
-const userUseCases = new UserUseCases(
-  userRepository,
-  otpRepository,
-  mockMailer
-);
-
 const TEST_EMAIL = "test_encryption@example.com";
 const TEST_NAME = "Test Encryption User";
 
 async function verifyEncryption() {
+  await initializeDatabaseConnections();
+
+  const userRepository = new PrismaUserRepository(prisma);
+  const otpRepository = new PostgresOTPRepository(prisma);
+
+  const userUseCases = new UserUseCases(
+    userRepository,
+    otpRepository,
+    mockMailer,
+  );
   try {
     console.log("Starting Encryption Verification...");
 
@@ -51,9 +57,8 @@ async function verifyEncryption() {
   }
 
   // To properly cleanup, let's use the encryption util
-  const { encrypt, encryptDeterministic, decrypt } = await import(
-    "../src/utils/encryption.js"
-  );
+  const { encrypt, encryptDeterministic, decrypt } =
+    await import("../src/utils/encryption.js");
 
   try {
     const encryptedEmail = encryptDeterministic(TEST_EMAIL);
@@ -94,28 +99,34 @@ async function verifyEncryption() {
 
     if (retrievedUser.email !== TEST_EMAIL)
       throw new Error(
-        `Decryption failed! Expected ${TEST_EMAIL}, got ${retrievedUser.email}`
+        `Decryption failed! Expected ${TEST_EMAIL}, got ${retrievedUser.email}`,
       );
     if (retrievedUser.name !== TEST_NAME)
       throw new Error(
-        `Decryption failed! Expected ${TEST_NAME}, got ${retrievedUser.name}`
+        `Decryption failed! Expected ${TEST_NAME}, got ${retrievedUser.name}`,
       );
 
+    // Activate user for middleware test
+    console.log("Activating user for middleware test...");
+    await prisma.user.update({
+      where: { id: dbUser.id },
+      data: { active: true, isVerified: true },
+    });
+
     console.log(
-      "✅ VERIFICATION SUCCESSFUL: Data is encrypted in DB and decrypted on retrieval."
+      "✅ VERIFICATION SUCCESSFUL: Data is encrypted in DB and decrypted on retrieval.",
     );
 
     // 4. Verify Middleware Token Decryption
     console.log("Verifying Middleware Token Decryption...");
-    const { authMiddleware } = await import(
-      "../src/interfaces/middleware/authMiddleware.js"
-    );
+    const { authMiddleware } =
+      await import("../src/interfaces/middleware/authMiddleware.js");
 
     // Generate token (now contains encrypted payload)
     const token = userUseCases.generateToken(retrievedUser);
     console.log(
       "Generated Token (First 20 chars):",
-      token.substring(0, 20) + "..."
+      token.substring(0, 20) + "...",
     );
 
     // Mock Req/Res/Next
@@ -133,7 +144,7 @@ async function verifyEncryption() {
     };
 
     // Run Middleware
-    authMiddleware(req, res, next);
+    await authMiddleware(req, res, next);
 
     console.log("Middleware Result req.user.email:", req.user.email);
     console.log("Middleware Result req.body.email:", req.body.email);
@@ -146,13 +157,13 @@ async function verifyEncryption() {
       throw new Error("Middleware failed to decrypt name in req.user");
 
     console.log(
-      "✅ MIDDLEWARE VERIFICATION SUCCESSFUL: Token carries encrypted payload which middleware decrypts."
+      "✅ MIDDLEWARE VERIFICATION SUCCESSFUL: Token carries encrypted payload which middleware decrypts.",
     );
   } catch (error) {
     console.error("❌ VERIFICATION FAILED:", error);
     process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    await closeDatabaseConnections();
   }
 }
 

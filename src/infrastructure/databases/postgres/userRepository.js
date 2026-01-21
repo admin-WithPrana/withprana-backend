@@ -124,7 +124,7 @@ export class PrismaUserRepository {
 
       return {
         data: users.map((user) =>
-          this._decryptUser({ ...user, id: Number(user.id) })
+          this._decryptUser({ ...user, id: Number(user.id) }),
         ),
         pagination: {
           total,
@@ -187,7 +187,7 @@ export class PrismaUserRepository {
   async updateUserSubscriptionType(userId, subscriptionType) {
     try {
       console.log(
-        `🔄 Updating user ${userId} subscription type to: ${subscriptionType}`
+        `🔄 Updating user ${userId} subscription type to: ${subscriptionType}`,
       );
 
       // Handle both BigInt and Number IDs
@@ -201,13 +201,13 @@ export class PrismaUserRepository {
       });
 
       console.log(
-        `✅ User ${userId} subscription type updated to: ${updatedUser.subscriptionType}`
+        `✅ User ${userId} subscription type updated to: ${updatedUser.subscriptionType}`,
       );
       return this._decryptUser(updatedUser);
     } catch (error) {
       console.error("❌ Error updating user subscription type:", error);
       throw new Error(
-        `Failed to update user subscription type: ${error.message}`
+        `Failed to update user subscription type: ${error.message}`,
       );
     }
   }
@@ -257,6 +257,45 @@ export class PrismaUserRepository {
       return this._decryptUser(user);
     } catch (error) {
       console.error("Error deleting user:", error);
+      throw error;
+    }
+  }
+
+  async updateLastLogin(userId) {
+    try {
+      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
+      await this.prisma.userLoginLog.upsert({
+        where: { userId: id },
+        update: {
+          lastLogin: new Date(),
+          warningSent: false, // Reset warning flag on login
+        },
+        create: {
+          userId: id,
+          lastLogin: new Date(),
+          warningSent: false,
+        },
+      });
+      // console.log(`✅ Updated last login for user ${userId}`);
+    } catch (error) {
+      console.error("❌ Error updating last login:", error);
+      // Non-blocking error
+    }
+  }
+
+  async reactivateUser(userId) {
+    try {
+      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
+      const user = await this.prisma.user.update({
+        where: { id },
+        data: {
+          active: true,
+          systemDeactivated: false,
+        },
+      });
+      return this._decryptUser(user);
+    } catch (error) {
+      console.error("Error reactivating user:", error);
       throw error;
     }
   }

@@ -1,14 +1,9 @@
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
+import { prisma } from "../../config/database.js";
 
-// Initialize Prisma Client and Repository
-// Note: In a production app with dependency injection, this should be injected.
-// But for middleware in this structure, we instantiate here or reuse a singleton.
-const prisma = new PrismaClient();
-const userRepository = new PrismaUserRepository(prisma);
-
-export async function authMiddleware(req, res, next) {
+export async function authMiddleware(req, res) {
+  const userRepository = new PrismaUserRepository(prisma);
   const authHeader = req.headers["authorization"];
 
   if (!authHeader) {
@@ -51,7 +46,7 @@ export async function authMiddleware(req, res, next) {
       };
     }
 
-    next();
+    // next(); // Fastify async handlers do not use next
   } catch (err) {
     console.error("Auth Middleware Error:", err);
     return res.status(403).json({ message: "Invalid or expired token" });

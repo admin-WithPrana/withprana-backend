@@ -144,7 +144,7 @@ export class UserController {
       const verifyDTO = new VerifyUserDTO(request.body);
       const result = await this.userUseCases.verifyUser(
         verifyDTO.email,
-        verifyDTO.otp
+        verifyDTO.otp,
       );
 
       return reply.code(200).send({
@@ -183,7 +183,7 @@ export class UserController {
       const userDTO = new CreateUserDTO(request.body);
       const result = await this.userUseCases.login(
         userDTO.email,
-        userDTO.oauth
+        userDTO.oauth,
       );
 
       // Handle different response structures based on success and OAuth status
@@ -211,7 +211,31 @@ export class UserController {
   async getUserById(request, reply) {
     try {
       const { id } = request.params;
+      const requestingUser = request.user;
+
       const user = await this.userUseCases.getUserById(id);
+
+      if (!user) {
+        return reply
+          .code(404)
+          .send({ success: false, message: "User not found" });
+      }
+
+      // Authorization & Privacy Logic
+      // If the requesting user is NOT the owner, filter private data
+      if (!requestingUser || String(requestingUser.id) !== String(user.id)) {
+        return reply.code(200).send({
+          success: true,
+          user: {
+            id: user.id,
+            name: user.name,
+            image: user.image,
+            // Do NOT expose email, subscription details, etc.
+          },
+        });
+      }
+
+      // If owner, return full data
       return reply.code(200).send({
         success: true,
         user,
@@ -228,6 +252,17 @@ export class UserController {
     try {
       const userDTO = new CreateUserDTO(request.body);
       const { id } = request.params;
+      const requestingUser = request.user || request.body.user; // Use request.user from middleware if available
+
+      // Authorization Check: Ensure user updates their own profile
+      if (!requestingUser || String(requestingUser.id) !== String(id)) {
+        return reply.code(403).send({
+          success: false,
+          message: "Unauthorized: You can only update your own profile",
+        });
+      }
+
+      userDTO.id = id;
       const user = await this.userUseCases.updateUser(id, userDTO);
 
       return reply.code(200).send({

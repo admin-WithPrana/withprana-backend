@@ -62,7 +62,13 @@ model User {
   subscriptions    Subscription[]
   transactions     Transaction[]
   userTags         UserTag[]
+  loginLog         UserLoginLog?
   encryptedUserKey String?
+  systemDeactivated Boolean @default(false)
+  fcmToken          String?  @map("fcm_token")
+
+
+
 
   @@map("users")
 }
@@ -350,4 +356,14 @@ enum TransactionStatus {
   SUCCEEDED
   FAILED
   REFUNDED
+}
+
+model UserLoginLog {
+  id        String   @id @default(uuid())
+  userId    BigInt   @unique
+  lastLogin DateTime
+  warningSent Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_login_logs")
 }

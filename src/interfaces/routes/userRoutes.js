@@ -62,58 +62,67 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   });
 
   app.post("/verify", (request, reply) =>
-    userController.verify(request, reply)
+    userController.verify(request, reply),
   );
   app.post("/resend-otp", (request, reply) =>
-    userController.resendOTP(request, reply)
+    userController.resendOTP(request, reply),
   );
   app.post("/login", (request, reply) => userController.login(request, reply));
 
-  app.get("/:id", (request, reply) =>
-    userController.getUserById(request, reply)
+  app.get("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.getUserById(request, reply),
   );
 
-  app.patch("/:id", async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const { name, profilePicture } = request.body;
+  app.patch(
+    "/:id",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const { name, profilePicture } = request.body;
 
-      let profilePictureUrl = undefined;
+        // ... existing logic will be handled by controller, passing request
+        // But wait, the route handler here has logic inside it.
+        // The original code has logic inside the route handler.
+        // I should preserve that logic but wrap it in auth middleware.
 
-      if (profilePicture) {
-        if (profilePicture?.file) {
-          let image = uploadToS3(profilePicture, "images");
-          profilePictureUrl = image[0];
-        } else if (
-          typeof profilePicture === "string" &&
-          profilePicture.trim() !== ""
-        ) {
-          profilePictureUrl = profilePicture;
+        let profilePictureUrl = undefined;
+
+        if (profilePicture) {
+          if (profilePicture?.file) {
+            let image = uploadToS3(profilePicture, "images");
+            profilePictureUrl = image[0];
+          } else if (
+            typeof profilePicture === "string" &&
+            profilePicture.trim() !== ""
+          ) {
+            profilePictureUrl = profilePicture;
+          }
         }
+
+        const payload = {
+          name: typeof name === "object" ? name.value : name,
+        };
+
+        if (profilePictureUrl !== "") {
+          payload.image = profilePictureUrl;
+        }
+
+        await userController.updateUser(
+          { ...request, params: { id }, body: payload, user: request.user }, // Ensure user is passed if attached by middleware
+          reply,
+        );
+      } catch (error) {
+        console.error("User update error:", error);
+        reply.status(500).send({
+          error: "Failed to update user",
+          details: error.message,
+        });
       }
-
-      const payload = {
-        name: typeof name === "object" ? name.value : name,
-      };
-
-      if (profilePictureUrl !== "") {
-        payload.image = profilePictureUrl;
-      }
-
-      await userController.updateUser(
-        { ...request, params: { id }, body: payload },
-        reply
-      );
-    } catch (error) {
-      console.error("User update error:", error);
-      reply.status(500).send({
-        error: "Failed to update user",
-        details: error.message,
-      });
-    }
-  });
+    },
+  );
 
   app.delete("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
-    userController.deleteUser(request, reply)
+    userController.deleteUser(request, reply),
   );
 };
