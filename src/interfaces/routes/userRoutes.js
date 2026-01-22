@@ -104,7 +104,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         }
 
         await userController.updateUser(
-          { ...request, params: { id }, body: payload, user: request.user }, // Ensure user is passed if attached by middleware
+          { ...request, params: { id }, body: payload, user: request.user },
           reply,
         );
       } catch (error) {
