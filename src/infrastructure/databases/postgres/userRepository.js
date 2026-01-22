@@ -299,4 +299,42 @@ export class PrismaUserRepository {
       throw error;
     }
   }
+  async createRefreshToken({ token, userId, expiresAt }) {
+    try {
+      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
+      return await this.prisma.refreshToken.create({
+        data: {
+          token,
+          userId: id,
+          expiresAt,
+        },
+      });
+    } catch (error) {
+      console.error("Error creating refresh token:", error);
+      throw error;
+    }
+  }
+
+  async findRefreshToken(token) {
+    try {
+      return await this.prisma.refreshToken.findUnique({
+        where: { token },
+      });
+    } catch (error) {
+      console.error("Error finding refresh token:", error);
+      throw error;
+    }
+  }
+
+  async revokeRefreshToken(id) {
+    try {
+      return await this.prisma.refreshToken.update({
+        where: { id },
+        data: { revoked: true },
+      });
+    } catch (error) {
+      console.error("Error revoking refresh token:", error);
+      throw error;
+    }
+  }
 }

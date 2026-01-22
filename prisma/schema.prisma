@@ -46,29 +46,27 @@ model Category {
 }
 
 model User {
-  id               BigInt         @id @default(autoincrement())
-  createdAt        DateTime       @default(now()) @map("created_at")
-  name             String?
-  email            String         @unique
-  password         String?
-  isVerified       Boolean        @default(false)
-  active           Boolean        @default(false)
-  image            String?
-  signupMethod     String         @default("email") @db.VarChar(20)
-  subscriptionType String         @default("free")
-  stripeCustomerId String?
-  likedMeditations Liked[]
-  playlists        Playlist[]
-  subscriptions    Subscription[]
-  transactions     Transaction[]
-  userTags         UserTag[]
-  loginLog         UserLoginLog?
-  encryptedUserKey String?
-  systemDeactivated Boolean @default(false)
-  fcmToken          String?  @map("fcm_token")
-
-
-
+  id                BigInt         @id @default(autoincrement())
+  createdAt         DateTime       @default(now()) @map("created_at")
+  name              String?
+  email             String         @unique
+  password          String?
+  isVerified        Boolean        @default(false)
+  active            Boolean        @default(false)
+  image             String?
+  signupMethod      String         @default("email") @db.VarChar(20)
+  subscriptionType  String         @default("free")
+  stripeCustomerId  String?
+  likedMeditations  Liked[]
+  playlists         Playlist[]
+  subscriptions     Subscription[]
+  transactions      Transaction[]
+  userTags          UserTag[]
+  loginLog          UserLoginLog?
+  encryptedUserKey  String?
+  systemDeactivated Boolean        @default(false)
+  fcmToken          String?        @map("fcm_token")
+  refreshTokens     RefreshToken[]
 
   @@map("users")
 }
@@ -359,11 +357,24 @@ enum TransactionStatus {
 }
 
 model UserLoginLog {
-  id        String   @id @default(uuid())
-  userId    BigInt   @unique
-  lastLogin DateTime
+  id          String   @id @default(uuid())
+  userId      BigInt   @unique
+  lastLogin   DateTime
   warningSent Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_login_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique // Hashed token
+  userId    BigInt
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }

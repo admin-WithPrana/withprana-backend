@@ -120,12 +120,24 @@ export class UserController {
           success: true,
           message: result.message,
           token: result.token,
+          refreshToken: result.refreshToken, // Add refresh token
           // user: result.user,
           // oauth: true
         });
       } else {
         return reply.code(201).send({
           success: true,
+          token: result.token,
+          // For non-oauth (OTP flow), register usually just sends OTP.
+          // But if auto-login is enabled after register, we need tokens.
+          // userUseCases.registerUser returns tokens if oauth=true, or "OTP sent" if oauth=false.
+          // IF oauth is false, result.token is UNDEFINED usually (unless immediate login).
+          // But looking at code: registerUser returns { token, refreshToken, oauth: true } for oauth.
+          // For non-oauth, it returns { message: "OTP sent" }.
+          // So line 122 matches oauth flow.
+          // Line 127 is for else (JSON.parse(result.oauth) is false).
+          // If false, result is { message: "OTP sent" }. No token.
+          // So I don't need to add refreshToken here for OTP flow.
           message: result.message,
           // user: result.user,
           // oauth: false
@@ -192,6 +204,7 @@ export class UserController {
           success: true,
           message: result.message,
           token: result.token,
+          refreshToken: result.refreshToken, // Add refresh token to response
           oauth: result.oauth,
         });
       } else {
@@ -204,6 +217,25 @@ export class UserController {
       return reply.code(500).send({
         success: false,
         message: error.message || "Internal server error",
+      });
+    }
+  }
+
+  async refresh(request, reply) {
+    try {
+      const { refreshToken } = request.body;
+      const result = await this.userUseCases.refreshToken(refreshToken);
+
+      return reply.code(200).send({
+        success: true,
+        token: result.token,
+        refreshToken: result.refreshToken,
+        user: result.user,
+      });
+    } catch (error) {
+      return reply.code(401).send({
+        success: false,
+        message: error.message || "Invalid Refresh Token",
       });
     }
   }
