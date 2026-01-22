@@ -7,13 +7,13 @@ export async function authMiddleware(req, res) {
   const authHeader = req.headers["authorization"];
 
   if (!authHeader) {
-    return res.status(401).json({ message: "Authorization header missing" });
+    return res.code(401).send({ message: "Authorization header missing" });
   }
 
   const token = authHeader.split(" ")[1];
 
   if (!token) {
-    return res.status(401).json({ message: "Not authorized" });
+    return res.code(401).send({ message: "Not authorized" });
   }
 
   try {
@@ -24,11 +24,11 @@ export async function authMiddleware(req, res) {
     const user = await userRepository.findById(decoded.id);
 
     if (!user) {
-      return res.status(401).json({ message: "User not found" });
+      return res.code(401).send({ message: "User not found" });
     }
 
     if (user.active === false) {
-      return res.status(403).json({ message: "User account is inactive" });
+      return res.code(403).send({ message: "User account is inactive" });
     }
 
     req.user = user;
@@ -49,6 +49,6 @@ export async function authMiddleware(req, res) {
     // next(); // Fastify async handlers do not use next
   } catch (err) {
     console.error("Auth Middleware Error:", err);
-    return res.status(403).json({ message: "Invalid or expired token" });
+    return res.code(403).send({ message: "Invalid or expired token" });
   }
 }

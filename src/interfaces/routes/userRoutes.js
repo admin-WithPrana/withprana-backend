@@ -81,11 +81,6 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         const { id } = request.params;
         const { name, profilePicture } = request.body;
 
-        // ... existing logic will be handled by controller, passing request
-        // But wait, the route handler here has logic inside it.
-        // The original code has logic inside the route handler.
-        // I should preserve that logic but wrap it in auth middleware.
-
         let profilePictureUrl = undefined;
 
         if (profilePicture) {
