@@ -120,7 +120,8 @@ export class UserController {
           success: true,
           message: result.message,
           token: result.token,
-          refreshToken: result.refreshToken, // Add refresh token
+          refreshToken: result.refreshToken,
+          register: result.register,
           // user: result.user,
           // oauth: true
         });
@@ -139,6 +140,7 @@ export class UserController {
           // If false, result is { message: "OTP sent" }. No token.
           // So I don't need to add refreshToken here for OTP flow.
           message: result.message,
+          register: result.register,
           // user: result.user,
           // oauth: false
         });
@@ -164,6 +166,7 @@ export class UserController {
         message: result.message,
         token: result.token,
         oauth: result.oauth,
+        register: result.register,
       });
     } catch (error) {
       return reply.code(400).send({

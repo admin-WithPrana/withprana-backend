@@ -138,6 +138,7 @@ export class UserUseCases {
           token,
           refreshToken,
           oauth: true,
+          register: false,
           message: "Login successful",
         };
       }
@@ -164,6 +165,7 @@ export class UserUseCases {
         token,
         refreshToken,
         oauth: true,
+        register: true,
         message: "Registration successful",
       };
     }
@@ -195,6 +197,7 @@ export class UserUseCases {
       return {
         user: existingUser,
         oauth: false,
+        register: false,
         message: "OTP sent for verification",
       };
     }
@@ -214,6 +217,7 @@ export class UserUseCases {
     return {
       user: createdUser,
       oauth: false,
+      register: true,
       message: "OTP sent for verification",
     };
   }
@@ -266,6 +270,7 @@ export class UserUseCases {
         token,
         refreshToken,
         oauth: true,
+        register: false,
         message: "OAuth user verified successfully",
       };
     }
@@ -291,11 +296,31 @@ export class UserUseCases {
     const refreshToken = this.generateRefreshToken();
     await this.storeRefreshToken(verifiedUser, refreshToken);
 
+    const wasActive = verifiedUser.active; // Capture previous state - WAIT. user is ALREADY verified and active by line 284.
+    // Wait, line 284: let verifiedUser = await this.userRepository.verifyEmail(encryptedEmail);
+    // This typically sets verified and active to true.
+    // So I need to capture state BEFORE line 284?
+    // In `verifyUser` function at line 250:
+    // line 252: let user = await this.userRepository.findByEmail(encryptedEmail);
+    // line 253: if (user) ...
+    // So 'user' holds the state BEFORE verification.
+
+    // Logic:
+    // If 'user.active' was false (or user.isVerified was false), then this is a NEW registration (completing verification).
+    // If 'user.active' was true, then this is a Login (just checking OTP).
+
+    // However, verifyUser is specifically for verifying email/OTP.
+    // If it's a login flow (login -> send OTP -> verify OTP), the user is ALREADY active.
+    // If it's a register flow (register -> send OTP -> verify OTP), the user is NOT active yet (or verified).
+
+    const isNewRegistration = !user.active; // using the 'user' fetch at start of function
+
     return {
       success: true,
       token,
       refreshToken,
       oauth: false,
+      register: isNewRegistration,
       message: "OTP verified successfully",
     };
   }
