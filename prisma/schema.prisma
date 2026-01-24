@@ -67,6 +67,26 @@ model User {
   @@map("users")
 }
 
+model LoginHistory {
+  id           String    @id @default(cuid())
+  userId       String?
+  adminId      String?
+  role         String
+  loggedInAt   DateTime  @default(now())
+  loggedOutAt  DateTime?
+  ipAddress    String?
+  userAgent    String?
+  device       String?
+  isActive     Boolean   @default(true)
+
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin        Admin?    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([adminId])
+}
+
+
 model Meditation {
   id             String               @id @default(cuid())
   title          String
@@ -91,6 +111,23 @@ model Meditation {
   playlistItems  PlaylistMeditation[]
 
   @@map("meditations")
+}
+
+model MeditationWatchHistory {
+  id            String     @id @default(cuid())
+  userId        String
+  meditationId  String
+  watchedAt     DateTime   @default(now())
+  watchedSeconds Int?
+  completed     Boolean    @default(false)
+  device        String?
+
+  meditation    Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([watchedAt])
+  @@unique([userId, meditationId, watchedAt])
+  @@map("meditation_watch_history")
 }
 
 model Tag {
@@ -304,6 +341,18 @@ model Transaction {
 
   @@map("transactions")
 }
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+}
+
 
 model Settings {
   id             String   @id @default(uuid())

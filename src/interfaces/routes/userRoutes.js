@@ -2,9 +2,6 @@ import { UserController } from "../controllers/userController.js";
 import { PostgresOTPRepository } from "../../infrastructure/databases/postgres/otpRepository.js";
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 import fastifyMultipart from "@fastify/multipart";
-import { uploadToCloudinary } from "../../infrastructure/services/cloudinaryService.js";
-import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
@@ -113,7 +110,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
     }
   });
 
-  app.delete("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+  app.delete("/:id", (request, reply) =>
     userController.deleteUser(request, reply)
   );
 };

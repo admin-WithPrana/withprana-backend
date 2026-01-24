@@ -112,8 +112,8 @@ export class UserController {
 
   async register(request, reply) {
     try {
-      const userDTO = new CreateUserDTO(request.body);
-      const result = await this.userUseCases.registerUser(userDTO);
+      const { device, ...userDTO } = new CreateUserDTO(request.body);
+      const result = await this.userUseCases.registerUser(userDTO, device, request.ip);
 
       if (JSON.parse(result.oauth)) {
         return reply.code(201).send({

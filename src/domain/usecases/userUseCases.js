@@ -37,7 +37,7 @@ export class UserUseCases {
     return decrypted;
   }
 
-  async registerUser(userData) {
+  async registerUser(userData, device, ip) {
     const user = new User({
       email: userData.email,
       name: userData.name,
@@ -96,10 +96,11 @@ export class UserUseCases {
         );
         updatedUser = this._decryptUser(updatedUser);
 
-        const token = this.generateToken(updatedUser);
+        const { token, loginHistory } = this.generateToken(updatedUser, device, ip);
         return {
           user: updatedUser,
           token,
+          loginHistory,
           oauth: true,
           message: "Login successful",
         };
@@ -117,7 +118,7 @@ export class UserUseCases {
       let createdUser = await this.userRepository.createUser(userToSave);
       createdUser = this._decryptUser(createdUser);
 
-      const token = this.generateToken(createdUser);
+      const token = this.generateToken(createdUser, device, ip);
 
       return {
         user: createdUser,
@@ -292,17 +293,33 @@ export class UserUseCases {
     }
   }
 
-  generateToken(user) {
-    return jwt.sign(
+  async generateToken(user, device, ip) {
+    const loginHistory = await this.loginHistoryRepository.create({
+      userId: user.id,
+      role: "USER",
+      ipAddress: ip,
+      device: device || null,
+      isActive: true
+    });
+
+    const token = jwt.sign(
       {
         id: user.id,
         email: encryptDeterministic(user.email),
         name: user.name ? encrypt(user.name) : undefined,
+        role: "USER",
+        sessionId: loginHistory.id
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
+
+    return {
+      token,
+      loginHistory
+    };
   }
+
 
   async sendOTPEmail(email, otpCode) {
     const mailOptions = {
