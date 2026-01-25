@@ -2,9 +2,9 @@ import { UserController } from "../controllers/userController.js";
 import { PostgresOTPRepository } from "../../infrastructure/databases/postgres/otpRepository.js";
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 import fastifyMultipart from "@fastify/multipart";
-import { uploadToCloudinary } from "../../infrastructure/services/cloudinaryService.js";
-import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
+import { LoginHistoryRepository } from "../../infrastructure/databases/postgres/loginHistoryRepository.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
@@ -13,8 +13,9 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
 
   const otpRepo = new PostgresOTPRepository(prismaRepository.prisma);
   const userRepo = new PrismaUserRepository(prismaRepository.prisma);
+  const loginHistoryRepository = new LoginHistoryRepository(prismaRepository.prisma)
 
-  const userController = new UserController(userRepo, otpRepo, mailer);
+  const userController = new UserController(userRepo, otpRepo, mailer, loginHistoryRepository);
 
   app.register(fastifyMultipart, {
     limits: {
@@ -27,7 +28,6 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post("/register", async (request, reply) => {
     try {
       const { name, email, profilePicture, oauth, method } = request.body;
-
       let profilePictureUrl = null;
 
       if (
@@ -49,6 +49,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
         method: method && typeof method === "object" ? method.value : method,
         image: profilePictureUrl,
+        device: request.body.device
       };
 
       await userController.register({ ...request, body: payload }, reply);
@@ -67,6 +68,16 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post("/resend-otp", (request, reply) =>
     userController.resendOTP(request, reply),
   );
+  app.post(
+    "/login",
+    (request, reply) => userController.login(request, reply)
+  );
+  app.post("/logout", { preHandler: authMiddleware }, (request, reply) =>
+    userController.logout(request, reply)
+  );
+
+  app.get("/:id", (request, reply) =>
+    userController.getUserById(request, reply))
   app.post("/login", (request, reply) => userController.login(request, reply));
   app.post("/refresh-token", (request, reply) =>
     userController.refresh(request, reply),

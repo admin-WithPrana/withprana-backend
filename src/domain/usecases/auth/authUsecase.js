@@ -23,7 +23,7 @@ export class AuthUsecase {
 
     // Generate JWT
     const token = jwt.sign(
-      { id: admin.id, email: admin.email, isSuper: admin.isSuper },
+      { id: admin.id, email: admin.email, isSuper: admin.isSuper, role: "ADMIN" },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );

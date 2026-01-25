@@ -5,7 +5,7 @@ export class MeditationController {
 
   async createMeditation(meditationData) {
     try {
-      console.log("data",meditationData)
+      console.log("data", meditationData)
       const meditation = await this.meditationUsecase.createMeditation(meditationData);
       return meditation;
     } catch (err) {
@@ -15,7 +15,7 @@ export class MeditationController {
 
   async create(req, reply) {
     try {
-      const { title, description, duration, link, thumbnail, isPremium, categoryId, subcategoryId,type,tags,scheduledAt,active} = req.body;
+      const { title, description, duration, link, thumbnail, isPremium, categoryId, subcategoryId, type, tags, scheduledAt, active } = req.body;
       const file = req.file;
 
       const meditationData = {
@@ -44,7 +44,8 @@ export class MeditationController {
   async getById(req, reply) {
     try {
       const id = req.params.id;
-      const meditation = await this.meditationUsecase.getMeditationById(id);
+      const user = req.user
+      const meditation = await this.meditationUsecase.getMeditationById(id, user);
       reply.send(meditation);
     } catch (err) {
       reply.status(404).send({ message: err.message });
@@ -75,8 +76,8 @@ export class MeditationController {
 
   async getAll(req, reply) {
     try {
-      const {limit,page,sort,order}=req.query
-      const meditations = await this.meditationUsecase.getAllMeditations(limit,page,sort,order);
+      const { limit, page, sort, order } = req.query
+      const meditations = await this.meditationUsecase.getAllMeditations(limit, page, sort, order);
       reply.send(meditations);
     } catch (err) {
       reply.status(500).send({ message: err.message });
@@ -95,25 +96,25 @@ export class MeditationController {
   }
 
   async update(req, reply) {
-  try {
-    const  id  = req.id;
-    const data = req.data;
+    try {
+      const id = req.id;
+      const data = req.data;
 
-    const updatedMeditation = await this.meditationUsecase.updateMeditation(id, data);
+      const updatedMeditation = await this.meditationUsecase.updateMeditation(id, data);
 
-    if (!updatedMeditation) {
-      return reply.status(404).send({ error: "Meditation not found" });
+      if (!updatedMeditation) {
+        return reply.status(404).send({ error: "Meditation not found" });
+      }
+
+      return reply.send(updatedMeditation);
+    } catch (error) {
+      console.error("Update error:", error);
+      return reply.status(500).send({
+        error: "Failed to update meditation",
+        details: error.message,
+      });
     }
-
-    return reply.send(updatedMeditation);
-  } catch (error) {
-    console.error("Update error:", error);
-    return reply.status(500).send({
-      error: "Failed to update meditation",
-      details: error.message,
-    });
   }
-}
 
 
   async delete(req, reply) {

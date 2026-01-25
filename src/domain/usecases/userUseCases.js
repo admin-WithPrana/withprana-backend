@@ -10,11 +10,12 @@ import {
 } from "../../utils/encryption.js";
 
 export class UserUseCases {
-  constructor(userRepo, otpRepository, mailer) {
+  constructor(userRepo, otpRepository, mailer, loginHistoryRepository) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
     this.otpRepository = otpRepository;
     this.mailer = mailer;
+    this.loginHistoryRepository = loginHistoryRepository
     // Assuming userRepo has access to prisma or pass a refresh token repo
     //Ideally we should inject a RefreshTokenRepository, but for now we might use userRepo.prisma if available or careful direct access
     //Actually, let's keep it simple. If userRepo is PrismaUserRepository, it has `prisma`.
@@ -65,7 +66,7 @@ export class UserUseCases {
     return decrypted;
   }
 
-  async registerUser(userData) {
+  async registerUser(userData, device, ip) {
     const user = new User({
       email: userData.email,
       name: userData.name,
@@ -129,12 +130,13 @@ export class UserUseCases {
         updatedUser = this._decryptUser(updatedUser);
         await this.userRepository.updateLastLogin(updatedUser.id);
 
-        const token = this.generateToken(updatedUser);
+        const { token, loginHistory } = await this.generateToken(updatedUser, device, ip);
         const refreshToken = this.generateRefreshToken();
         await this.storeRefreshToken(updatedUser, refreshToken);
 
         return {
           user: updatedUser,
+          loginHistory,
           token,
           refreshToken,
           oauth: true,
@@ -156,13 +158,14 @@ export class UserUseCases {
       createdUser = this._decryptUser(createdUser);
       await this.userRepository.updateLastLogin(createdUser.id);
 
-      const token = this.generateToken(createdUser);
+      const { token, loginHistory } = await this.generateToken(createdUser, device, ip);
       const refreshToken = this.generateRefreshToken();
       await this.storeRefreshToken(createdUser, refreshToken);
 
       return {
         user: createdUser,
         token,
+        loginHistory,
         refreshToken,
         oauth: true,
         register: true,
@@ -251,7 +254,7 @@ export class UserUseCases {
     return { success: true, message: "OTP resent successfully" };
   }
 
-  async verifyUser(email, otpCode) {
+  async verifyUser(email, otpCode, device, ip) {
     const encryptedEmail = encryptDeterministic(email);
     let user = await this.userRepository.findByEmail(encryptedEmail);
     if (user) user = this._decryptUser(user);
@@ -261,13 +264,14 @@ export class UserUseCases {
     }
 
     if (user.oauth === true) {
-      const token = this.generateToken(user);
+      const { token, loginHistory } = await this.generateToken(user, device, ip);
       const refreshToken = this.generateRefreshToken();
       await this.storeRefreshToken(user, refreshToken);
 
       return {
         success: true,
         token,
+        loginHistory,
         refreshToken,
         oauth: true,
         register: false,
@@ -292,7 +296,8 @@ export class UserUseCases {
     await this.otpRepository.updateOTP(encryptedEmail, false);
     await this.userRepository.updateLastLogin(verifiedUser.id);
 
-    const token = this.generateToken(verifiedUser);
+    const { token, loginHistory } = await this.generateToken(verifiedUser, device, ip);
+
     const refreshToken = this.generateRefreshToken();
     await this.storeRefreshToken(verifiedUser, refreshToken);
 
@@ -318,6 +323,7 @@ export class UserUseCases {
     return {
       success: true,
       token,
+      loginHistory,
       refreshToken,
       oauth: false,
       register: isNewRegistration,
@@ -374,17 +380,34 @@ export class UserUseCases {
     }
   }
 
-  generateToken(user) {
-    return jwt.sign(
+  async generateToken(user, device, ip) {
+    const loginHistory = await this.loginHistoryRepository.create({
+      userId: user.id,
+      role: "USER",
+      ipAddress: ip || "",
+      device: device || null,
+      isActive: true
+    });
+
+    const token = jwt.sign(
       {
         id: user.id,
         email: encryptDeterministic(user.email),
         name: user.name ? encrypt(user.name) : undefined,
+        role: "USER",
+        sessionId: loginHistory.id
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
+
+    console.log(token, loginHistory)
+    return {
+      token,
+      loginHistory
+    };
   }
+
 
   async sendOTPEmail(email, otpCode) {
     const mailOptions = {
@@ -405,6 +428,16 @@ export class UserUseCases {
       users.data = users.data.map((u) => this._decryptUser(u));
     }
     return users;
+  }
+
+  async logoutUser(userId) {
+    const loginHistory = await this.loginHistoryRepository.logoutLastForUser(userId);
+
+    if (!loginHistory) {
+      return null;
+    }
+
+    return loginHistory;
   }
 
   async getUserById(id) {

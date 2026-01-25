@@ -106,20 +106,21 @@ import { UserUseCases } from "../../domain/usecases/userUseCases.js";
 import { CreateUserDTO, VerifyUserDTO } from "../dtos/userDTO.js";
 
 export class UserController {
-  constructor(userRepository, otpRepository, mailer) {
-    this.userUseCases = new UserUseCases(userRepository, otpRepository, mailer);
+  constructor(userRepository, otpRepository, mailer, loginHistoryRepository) {
+    this.userUseCases = new UserUseCases(userRepository, otpRepository, mailer, loginHistoryRepository);
   }
 
   async register(request, reply) {
     try {
-      const userDTO = new CreateUserDTO(request.body);
-      const result = await this.userUseCases.registerUser(userDTO);
+      const { device, ...userDTO } = new CreateUserDTO(request.body);
+      const result = await this.userUseCases.registerUser(userDTO, device, request.ip);
 
       if (JSON.parse(result.oauth)) {
         return reply.code(201).send({
           success: true,
           message: result.message,
           token: result.token,
+          loginHistory: result.loginHistory,
           refreshToken: result.refreshToken,
           register: result.register,
           // user: result.user,
@@ -140,12 +141,14 @@ export class UserController {
           // If false, result is { message: "OTP sent" }. No token.
           // So I don't need to add refreshToken here for OTP flow.
           message: result.message,
+          loginHistory: result.loginHistory,
           register: result.register,
           // user: result.user,
           // oauth: false
         });
       }
     } catch (error) {
+      console.log(error)
       return reply.code(400).send({
         success: false,
         message: error.message,
@@ -159,6 +162,8 @@ export class UserController {
       const result = await this.userUseCases.verifyUser(
         verifyDTO.email,
         verifyDTO.otp,
+        verifyDTO.device,
+        request?.ip
       );
 
       return reply.code(200).send({
@@ -169,6 +174,7 @@ export class UserController {
         register: result.register,
       });
     } catch (error) {
+      console.log(error)
       return reply.code(400).send({
         success: false,
         message: error.message,
@@ -224,6 +230,32 @@ export class UserController {
     }
   }
 
+
+  async logout(request, reply) {
+    try {
+      console.log("user", request.user)
+      const userId = request.user.id;
+
+      const result = await this.userUseCases.logoutUser(userId);
+
+      if (result && result.success !== false) {
+        return reply.code(200).send({
+          success: true,
+          message: "Logged out successfully",
+        });
+      }
+
+      return reply.code(400).send({
+        success: false,
+        message: "No active session found",
+      });
+    } catch (error) {
+      return reply.code(500).send({
+        success: false,
+        message: error.message || "Internal server error",
+      })
+    }
+  }
   async refresh(request, reply) {
     try {
       const { refreshToken } = request.body;

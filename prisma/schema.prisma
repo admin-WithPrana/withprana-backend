@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Otp {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   email     String
   otpCode   String   @map("otpcode")
   expiresAt DateTime @map("expires_at")
@@ -19,18 +19,19 @@ model Otp {
 }
 
 model Admin {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   email     String   @unique
   password  String
   active    Boolean  @default(true)
   isSuper   Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
+  loginHistory LoginHistory[]
 
   @@map("admins")
 }
 
 model Category {
-  id              Int           @id @default(autoincrement())
+  id              String   @id @default(uuid())
   name            String
   active          Boolean       @default(true)
   isDeleted       Boolean       @default(false)
@@ -46,33 +47,55 @@ model Category {
 }
 
 model User {
-  id                BigInt         @id @default(autoincrement())
-  createdAt         DateTime       @default(now()) @map("created_at")
-  name              String?
-  email             String         @unique
-  password          String?
-  isVerified        Boolean        @default(false)
-  active            Boolean        @default(false)
-  image             String?
-  signupMethod      String         @default("email") @db.VarChar(20)
-  subscriptionType  String         @default("free")
-  stripeCustomerId  String?
-  likedMeditations  Liked[]
-  playlists         Playlist[]
-  subscriptions     Subscription[]
-  transactions      Transaction[]
-  userTags          UserTag[]
-  loginLog          UserLoginLog?
-  encryptedUserKey  String?
+  id               String         @id @default(uuid())
+  createdAt        DateTime       @default(now()) @map("created_at")
+  name             String?
+  email            String         @unique
+  password         String?
+  isVerified       Boolean        @default(false)
+  active           Boolean        @default(false)
+  image            String?
+  signupMethod     String         @default("email") @db.VarChar(20)
+  subscriptionType String         @default("free")
+  stripeCustomerId String?
+  likedMeditations Liked[]
+  playlists        Playlist[]
+  subscriptions    Subscription[]
+  transactions     Transaction[]
+  userTags         UserTag[]
+  loginHistory     LoginHistory[]
+  watchHistory     MeditationWatchHistory[]
+  loginLog         UserLoginLog?
+  encryptedUserKey String?
   systemDeactivated Boolean        @default(false)
-  fcmToken          String?        @map("fcm_token")
-  refreshTokens     RefreshToken[]
+  fcmToken         String?        @map("fcm_token")
+  refreshTokens    RefreshToken[]
 
   @@map("users")
 }
 
+
+model LoginHistory {
+  id           String    @id @default(uuid())
+  userId       String?
+  adminId      String?
+  role         String
+  loggedInAt   DateTime  @default(now())
+  loggedOutAt  DateTime?
+  ipAddress    String?
+  userAgent    String?
+  device       String?
+  isActive     Boolean   @default(true)
+
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin        Admin?    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([adminId])
+}
+
 model Meditation {
-  id             String               @id @default(cuid())
+  id             String               @id @default(uuid())
   title          String
   description    String?
   duration       Int
@@ -84,7 +107,7 @@ model Meditation {
   playCount      Int                  @default(0)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
-  categoryId     Int
+  categoryId     String
   subcategoryId  String?
   type           String?
   scheduledAt    DateTime?
@@ -93,12 +116,31 @@ model Meditation {
   category       Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory    Subcategory?         @relation(fields: [subcategoryId], references: [id])
   playlistItems  PlaylistMeditation[]
+  watchHistory   MeditationWatchHistory[]
 
   @@map("meditations")
 }
 
+model MeditationWatchHistory {
+  id            String     @id @default(uuid())
+  userId        String
+  meditationId  String
+  watchedAt     DateTime   @default(now())
+  watchedSeconds Int?
+  completed     Boolean    @default(false)
+  device        String?
+
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meditation    Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([watchedAt])
+  @@unique([userId, meditationId, watchedAt])
+  @@map("meditation_watch_history")
+}
+
 model Tag {
-  id                   String                @id @default(cuid())
+  id                   String                @id @default(uuid())
   name                 String                @unique
   active               Boolean               @default(true)
   isDeleted            Boolean               @default(false)
@@ -129,7 +171,7 @@ model Subcategory {
   isDeleted   Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  categoryId  Int
+  categoryId  String
   color       String?
   meditations Meditation[]
   category    Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -140,7 +182,7 @@ model Subcategory {
 
 model Liked {
   id           String     @id @default(uuid())
-  userId       BigInt
+  userId       String
   meditationId String
   createdAt    DateTime   @default(now())
   meditation   Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
@@ -158,7 +200,7 @@ model Playlist {
   isPublic    Boolean              @default(false)
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
-  userId      BigInt
+  userId      String
   items       PlaylistMeditation[]
   user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -180,7 +222,7 @@ model PlaylistMeditation {
 }
 
 model Policy {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   type      Int      @unique
   content   String
   active    Boolean  @default(true)
@@ -237,7 +279,7 @@ model OnboardingOptionTag {
 
 model UserTag {
   id        String   @id @default(uuid())
-  userId    BigInt
+  userId    String
   tagId     String
   createdAt DateTime @default(now())
   tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
@@ -250,7 +292,7 @@ model UserTag {
 }
 
 model SubscriptionPlan {
-  id            String         @id @default(cuid())
+  id            String         @id @default(uuid())
   name          String
   price         Float
   currency      String         @default("usd")
@@ -268,8 +310,8 @@ model SubscriptionPlan {
 }
 
 model Subscription {
-  id                   String             @id @default(cuid())
-  userId               BigInt
+  id                   String             @id @default(uuid())
+  userId               String
   planId               String
   status               SubscriptionStatus @default(ACTIVE)
   currentPeriodStart   DateTime
@@ -288,9 +330,9 @@ model Subscription {
 }
 
 model Transaction {
-  id                    String            @id @default(cuid())
+  id                    String            @id @default(uuid())
   subscriptionId        String?
-  userId                BigInt
+  userId                String
   amount                Float
   currency              String            @default("usd")
   status                TransactionStatus @default(PENDING)
@@ -309,6 +351,17 @@ model Transaction {
   @@map("transactions")
 }
 
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+}
+
 model Settings {
   id             String   @id @default(uuid())
   tagline        String
@@ -321,7 +374,7 @@ model Settings {
 }
 
 model ThoughtOfTheDay {
-  id          String        @id
+  id          String        @id @default(uuid())
   thumbnail   String
   link        String
   title       String
@@ -330,7 +383,7 @@ model ThoughtOfTheDay {
   scheduledAt DateTime
   status      ThoughtStatus @default(PENDING)
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime      @updatedAt
 }
 
 enum ThoughtStatus {
