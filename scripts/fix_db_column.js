@@ -37,13 +37,22 @@ async function fixSchema() {
       );
     }
     // Inspect OTPs table schema
-    const result = await prisma.$queryRaw`
+    const otpsSchemaResult = await prisma.$queryRaw`
       SELECT column_name, data_type, column_default, is_nullable
       FROM information_schema.columns
       WHERE table_name = 'otps';
     `;
 
-    console.log("OTPs Table Schema:", result);
+    console.log("OTPs Table Schema:", otpsSchemaResult);
+
+    // Inspect Users table schema
+    const usersIdSchemaResult = await prisma.$queryRaw`
+      SELECT column_name, data_type, column_default, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'id';
+    `;
+
+    console.log("Users Table ID Schema:", usersIdSchemaResult);
 
     // Check sequences
     const sequences = await prisma.$queryRaw`
@@ -78,9 +87,7 @@ async function fixSchema() {
       /* ignore if exists */
     }
 
-    console.log("Success! Results:", { result, result2, result3 });
-    console.log('Columns "systemDeactivated" and "fcm_token" checked/added.');
-    console.log('Table "refresh_tokens" created (if not existed).');
+    console.log("Success! Schema checked/fixed.");
   } catch (error) {
     console.error("Error fixing schema:", error);
   } finally {

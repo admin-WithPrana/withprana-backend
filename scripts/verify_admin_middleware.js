@@ -24,7 +24,6 @@ async function runTest() {
     // Create Admin
     admin = await prisma.admin.create({
       data: {
-        id: Math.floor(Math.random() * 100000),
         email: adminEmail,
         password: "hashedpassword",
         isSuper: true,
