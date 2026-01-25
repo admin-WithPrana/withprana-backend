@@ -48,14 +48,14 @@ export async function authMiddleware(req, res) {
       }
     }
 
-    request.user = user;
+    req.user = user;
 
     if (typeof req.body === "object" && req.body !== null) {
       req.body.email = user.email;
       // req.body.name = user.name; // user.name might not exist on admin
       req.body.user = user;
     } else {
-      request.body = {
+      req.body = {
         email: user.email,
         user: user,
       };
@@ -65,4 +65,3 @@ export async function authMiddleware(req, res) {
     return res.code(403).send({ message: "Invalid or expired token" });
   }
 }
-

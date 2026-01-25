@@ -123,9 +123,7 @@ export class PrismaUserRepository {
       const total = await this.prisma.user.count({ where });
 
       return {
-        data: users.map((user) =>
-          this._decryptUser({ ...user, id: Number(user.id) }),
-        ),
+        data: users.map((user) => this._decryptUser({ ...user })),
         pagination: {
           total,
           page,
@@ -141,9 +139,8 @@ export class PrismaUserRepository {
 
   async findById(id) {
     try {
-      const isNumberId = !isNaN(Number(id));
       const user = await this.prisma.user.findUnique({
-        where: { id: isNumberId ? Number(id) : id },
+        where: { id: id },
       });
       return this._decryptUser(user);
     } catch (error) {
@@ -158,7 +155,7 @@ export class PrismaUserRepository {
       // Handle encryption if name is being updated
       if (updateData.name) {
         const user = await this.prisma.user.findUnique({
-          where: { id: Number(id) },
+          where: { id: id },
         });
         if (user) {
           if (user.encryptedUserKey) {
@@ -171,7 +168,7 @@ export class PrismaUserRepository {
       }
 
       const user = await this.prisma.user.update({
-        where: { id: Number(id) },
+        where: { id: id },
         data: updateData,
       });
       return this._decryptUser(user);
@@ -192,7 +189,7 @@ export class PrismaUserRepository {
       );
 
       // Handle both BigInt and Number IDs
-      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
+      const id = userId;
 
       const updatedUser = await this.prisma.user.update({
         where: { id },
@@ -216,7 +213,7 @@ export class PrismaUserRepository {
   // Optional: Additional helper method for subscription management
   async getUserSubscriptionStatus(userId) {
     try {
-      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
+      const id = userId;
 
       const user = await this.prisma.user.findUnique({
         where: { id },
@@ -250,7 +247,7 @@ export class PrismaUserRepository {
     try {
       // Prisma handles cascading deletes based on schema relation modes
       // Ensure the id is parsed correctly
-      const parsedId = Number(id);
+      const parsedId = id;
 
       const user = await this.prisma.user.delete({
         where: { id: parsedId },
@@ -264,9 +261,8 @@ export class PrismaUserRepository {
 
   async updateLastLogin(userId) {
     try {
-      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
       await this.prisma.userLoginLog.upsert({
-        where: { userId: id },
+        where: { userId: userId },
         update: {
           lastLogin: new Date(),
           warningSent: false, // Reset warning flag on login
@@ -286,9 +282,8 @@ export class PrismaUserRepository {
 
   async reactivateUser(userId) {
     try {
-      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
       const user = await this.prisma.user.update({
-        where: { id },
+        where: { id: userId },
         data: {
           active: true,
           systemDeactivated: false,
@@ -302,11 +297,10 @@ export class PrismaUserRepository {
   }
   async createRefreshToken({ token, userId, expiresAt }) {
     try {
-      const id = typeof userId === "bigint" ? Number(userId) : Number(userId);
       return await this.prisma.refreshToken.create({
         data: {
           token,
-          userId: id,
+          userId: userId,
           expiresAt,
         },
       });
