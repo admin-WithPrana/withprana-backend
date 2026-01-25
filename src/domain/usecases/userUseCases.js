@@ -15,11 +15,7 @@ export class UserUseCases {
     this.otpRepository = otpRepository;
     this.otpRepository = otpRepository;
     this.mailer = mailer;
-    this.loginHistoryRepository = loginHistoryRepository
-    // Assuming userRepo has access to prisma or pass a refresh token repo
-    //Ideally we should inject a RefreshTokenRepository, but for now we might use userRepo.prisma if available or careful direct access
-    //Actually, let's keep it simple. If userRepo is PrismaUserRepository, it has `prisma`.
-    //Or we can extend PrismaUserRepository.
+    this.loginHistoryRepository = loginHistoryRepository;
   }
 
   generateRefreshToken() {
@@ -27,15 +23,7 @@ export class UserUseCases {
   }
 
   async storeRefreshToken(user, refreshToken) {
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-    // We need to access the refreshToken model.
-    // If userRepository doesn't expose it, we might need to access it here or update repo.
-    // Let's assume userRepository has a method `saveRefreshToken` or similar we can add.
-    // OR access this.userRepository.prisma.refreshToken.create via a new method.
-
-    // Simplest: Add `createRefreshToken` to UserRepository.
-    // But I can't modify UserRepository file easily without viewing it first.
-    // I will call `this.userRepository.createRefreshToken` and impl it later.
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await this.userRepository.createRefreshToken({
       token: hashToken(refreshToken),
       userId: user.id,
@@ -130,7 +118,11 @@ export class UserUseCases {
         updatedUser = this._decryptUser(updatedUser);
         await this.userRepository.updateLastLogin(updatedUser.id);
 
-        const { token, loginHistory } = await this.generateToken(updatedUser, device, ip);
+        const { token, loginHistory } = await this.generateToken(
+          updatedUser,
+          device,
+          ip,
+        );
         const refreshToken = this.generateRefreshToken();
         await this.storeRefreshToken(updatedUser, refreshToken);
 
@@ -158,7 +150,11 @@ export class UserUseCases {
       createdUser = this._decryptUser(createdUser);
       await this.userRepository.updateLastLogin(createdUser.id);
 
-      const { token, loginHistory } = await this.generateToken(createdUser, device, ip);
+      const { token, loginHistory } = await this.generateToken(
+        createdUser,
+        device,
+        ip,
+      );
       const refreshToken = this.generateRefreshToken();
       await this.storeRefreshToken(createdUser, refreshToken);
 
@@ -264,7 +260,11 @@ export class UserUseCases {
     }
 
     if (user.oauth === true) {
-      const { token, loginHistory } = await this.generateToken(user, device, ip);
+      const { token, loginHistory } = await this.generateToken(
+        user,
+        device,
+        ip,
+      );
       const refreshToken = this.generateRefreshToken();
       await this.storeRefreshToken(user, refreshToken);
 
@@ -296,7 +296,11 @@ export class UserUseCases {
     await this.otpRepository.updateOTP(encryptedEmail, false);
     await this.userRepository.updateLastLogin(verifiedUser.id);
 
-    const { token, loginHistory } = await this.generateToken(verifiedUser, device, ip);
+    const { token, loginHistory } = await this.generateToken(
+      verifiedUser,
+      device,
+      ip,
+    );
 
     const refreshToken = this.generateRefreshToken();
     await this.storeRefreshToken(verifiedUser, refreshToken);
@@ -386,7 +390,7 @@ export class UserUseCases {
       role: "USER",
       ipAddress: ip || "",
       device: device || null,
-      isActive: true
+      isActive: true,
     });
 
     const token = jwt.sign(
@@ -395,19 +399,17 @@ export class UserUseCases {
         email: encryptDeterministic(user.email),
         name: user.name ? encrypt(user.name) : undefined,
         role: "USER",
-        sessionId: loginHistory.id
+        sessionId: loginHistory.id,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
 
-    console.log(token, loginHistory)
     return {
       token,
-      loginHistory
+      loginHistory,
     };
   }
-
 
   async sendOTPEmail(email, otpCode) {
     const mailOptions = {
@@ -431,7 +433,8 @@ export class UserUseCases {
   }
 
   async logoutUser(userId) {
-    const loginHistory = await this.loginHistoryRepository.logoutLastForUser(userId);
+    const loginHistory =
+      await this.loginHistoryRepository.logoutLastForUser(userId);
 
     if (!loginHistory) {
       return null;
