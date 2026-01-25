@@ -65,11 +65,11 @@ model User {
   userTags         UserTag[]
   loginHistory     LoginHistory[]
   watchHistory     MeditationWatchHistory[]
-  loginLog         UserLoginLog?
+  loginLogs UserLoginLog[]
+  refreshTokens RefreshToken[]
   encryptedUserKey String?
   systemDeactivated Boolean        @default(false)
   fcmToken         String?        @map("fcm_token")
-  refreshTokens    RefreshToken[]
 
   @@map("users")
 }
@@ -411,7 +411,7 @@ enum TransactionStatus {
 
 model UserLoginLog {
   id          String   @id @default(uuid())
-  userId      BigInt   @unique
+  userId      String   @unique
   lastLogin   DateTime
   warningSent Boolean  @default(false)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -422,7 +422,7 @@ model UserLoginLog {
 model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique // Hashed token
-  userId    BigInt
+  userId    String
   expiresAt DateTime
   createdAt DateTime @default(now())
   revoked   Boolean  @default(false)

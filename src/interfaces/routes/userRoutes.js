@@ -76,15 +76,8 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
     userController.logout(request, reply)
   );
 
-  app.get("/:id", (request, reply) =>
-    userController.getUserById(request, reply))
-  app.post("/login", (request, reply) => userController.login(request, reply));
   app.post("/refresh-token", (request, reply) =>
     userController.refresh(request, reply),
-  );
-
-  app.get("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
-    userController.getUserById(request, reply),
   );
 
   app.patch(
