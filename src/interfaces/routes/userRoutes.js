@@ -5,7 +5,6 @@ import fastifyMultipart from "@fastify/multipart";
 import { LoginHistoryRepository } from "../../infrastructure/databases/postgres/loginHistoryRepository.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
-
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
     throw new Error("Prisma client is not properly initialized");
@@ -13,9 +12,16 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
 
   const otpRepo = new PostgresOTPRepository(prismaRepository.prisma);
   const userRepo = new PrismaUserRepository(prismaRepository.prisma);
-  const loginHistoryRepository = new LoginHistoryRepository(prismaRepository.prisma)
+  const loginHistoryRepository = new LoginHistoryRepository(
+    prismaRepository.prisma,
+  );
 
-  const userController = new UserController(userRepo, otpRepo, mailer, loginHistoryRepository);
+  const userController = new UserController(
+    userRepo,
+    otpRepo,
+    mailer,
+    loginHistoryRepository,
+  );
 
   app.register(fastifyMultipart, {
     limits: {
@@ -49,7 +55,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
         method: method && typeof method === "object" ? method.value : method,
         image: profilePictureUrl,
-        device: request.body.device
+        device: request.body.device,
       };
 
       await userController.register({ ...request, body: payload }, reply);
@@ -68,16 +74,17 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post("/resend-otp", (request, reply) =>
     userController.resendOTP(request, reply),
   );
-  app.post(
-    "/login",
-    (request, reply) => userController.login(request, reply)
-  );
+  app.post("/login", (request, reply) => userController.login(request, reply));
   app.post("/logout", { preHandler: authMiddleware }, (request, reply) =>
-    userController.logout(request, reply)
+    userController.logout(request, reply),
   );
 
   app.post("/refresh-token", (request, reply) =>
     userController.refresh(request, reply),
+  );
+
+  app.get("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.getUserById(request, reply),
   );
 
   app.patch(
