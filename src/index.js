@@ -8,7 +8,11 @@ import { PostgresOTPRepository } from "./infrastructure/databases/postgres/otpRe
 // import { postQueue } from './config/bullmq.js';
 import fastifyRawBody from "fastify-raw-body";
 import rateLimit from "@fastify/rate-limit";
-import { thoughtQueue, meditationQueue } from "./config/bullmq.js";
+import {
+  thoughtQueue,
+  meditationQueue,
+  inactivityQueue,
+} from "./config/bullmq.js";
 
 const startServer = async () => {
   const app = fastify({ logger: true });
@@ -70,3 +74,14 @@ const startServer = async () => {
 };
 
 startServer();
+
+// Schedule inactivity check daily
+inactivityQueue.add(
+  "checkInactivity",
+  {},
+  {
+    repeat: {
+      pattern: "0 0 * * *", // Run once a day at midnight
+    },
+  },
+);

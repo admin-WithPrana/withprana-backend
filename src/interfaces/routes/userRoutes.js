@@ -63,10 +63,10 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   });
 
   app.post("/verify", (request, reply) =>
-    userController.verify(request, reply)
+    userController.verify(request, reply),
   );
   app.post("/resend-otp", (request, reply) =>
-    userController.resendOTP(request, reply)
+    userController.resendOTP(request, reply),
   );
   app.post(
     "/login",
@@ -77,50 +77,61 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   );
 
   app.get("/:id", (request, reply) =>
-    userController.getUserById(request, reply)
+    userController.getUserById(request, reply))
+  app.post("/login", (request, reply) => userController.login(request, reply));
+  app.post("/refresh-token", (request, reply) =>
+    userController.refresh(request, reply),
   );
 
-  app.patch("/:id", async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const { name, profilePicture } = request.body;
+  app.get("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.getUserById(request, reply),
+  );
 
-      let profilePictureUrl = undefined;
+  app.patch(
+    "/:id",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const { name, profilePicture } = request.body;
 
-      if (profilePicture) {
-        if (profilePicture?.file) {
-          let image = uploadToS3(profilePicture, "images");
-          profilePictureUrl = image[0];
-        } else if (
-          typeof profilePicture === "string" &&
-          profilePicture.trim() !== ""
-        ) {
-          profilePictureUrl = profilePicture;
+        let profilePictureUrl = undefined;
+
+        if (profilePicture) {
+          if (profilePicture?.file) {
+            let image = uploadToS3(profilePicture, "images");
+            profilePictureUrl = image[0];
+          } else if (
+            typeof profilePicture === "string" &&
+            profilePicture.trim() !== ""
+          ) {
+            profilePictureUrl = profilePicture;
+          }
         }
+
+        const payload = {
+          name: typeof name === "object" ? name.value : name,
+        };
+
+        if (profilePictureUrl !== "") {
+          payload.image = profilePictureUrl;
+        }
+
+        await userController.updateUser(
+          { ...request, params: { id }, body: payload, user: request.user },
+          reply,
+        );
+      } catch (error) {
+        console.error("User update error:", error);
+        reply.status(500).send({
+          error: "Failed to update user",
+          details: error.message,
+        });
       }
+    },
+  );
 
-      const payload = {
-        name: typeof name === "object" ? name.value : name,
-      };
-
-      if (profilePictureUrl !== "") {
-        payload.image = profilePictureUrl;
-      }
-
-      await userController.updateUser(
-        { ...request, params: { id }, body: payload },
-        reply
-      );
-    } catch (error) {
-      console.error("User update error:", error);
-      reply.status(500).send({
-        error: "Failed to update user",
-        details: error.message,
-      });
-    }
-  });
-
-  app.delete("/:id", (request, reply) =>
-    userController.deleteUser(request, reply)
+  app.delete("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.deleteUser(request, reply),
   );
 };

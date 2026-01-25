@@ -1,5 +1,7 @@
 import { User, OTP } from "../entities/user.js";
 import jwt from "jsonwebtoken";
+import crypto from "crypto"; // For random token generation
+import { hashToken } from "../../utils/tokenUtils.js";
 import {
   encrypt,
   decrypt,
@@ -11,8 +13,34 @@ export class UserUseCases {
   constructor(userRepo, otpRepository, mailer, loginHistoryRepository) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
+    this.otpRepository = otpRepository;
     this.mailer = mailer;
     this.loginHistoryRepository = loginHistoryRepository
+    // Assuming userRepo has access to prisma or pass a refresh token repo
+    //Ideally we should inject a RefreshTokenRepository, but for now we might use userRepo.prisma if available or careful direct access
+    //Actually, let's keep it simple. If userRepo is PrismaUserRepository, it has `prisma`.
+    //Or we can extend PrismaUserRepository.
+  }
+
+  generateRefreshToken() {
+    return crypto.randomBytes(40).toString("hex");
+  }
+
+  async storeRefreshToken(user, refreshToken) {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    // We need to access the refreshToken model.
+    // If userRepository doesn't expose it, we might need to access it here or update repo.
+    // Let's assume userRepository has a method `saveRefreshToken` or similar we can add.
+    // OR access this.userRepository.prisma.refreshToken.create via a new method.
+
+    // Simplest: Add `createRefreshToken` to UserRepository.
+    // But I can't modify UserRepository file easily without viewing it first.
+    // I will call `this.userRepository.createRefreshToken` and impl it later.
+    await this.userRepository.createRefreshToken({
+      token: hashToken(refreshToken),
+      userId: user.id,
+      expiresAt,
+    });
   }
 
   subscriptionType = ["free", "premium", "enterprise"];
@@ -69,7 +97,7 @@ export class UserUseCases {
         existingUser.active !== true
       ) {
         throw new Error(
-          "This email is already registered with OAuth. Please login with OAuth."
+          "This email is already registered with OAuth. Please login with OAuth.",
         );
       }
     }
@@ -77,7 +105,11 @@ export class UserUseCases {
     if (JSON.parse(userData.oauth) == true) {
       if (existingUser) {
         if (existingUser.active === false) {
-          throw new Error("Login blocked by admin");
+          if (existingUser.systemDeactivated) {
+            await this.userRepository.reactivateUser(existingUser.id);
+          } else {
+            throw new Error("Login blocked by admin");
+          }
         }
 
         // Encrypt name before updating
@@ -88,21 +120,27 @@ export class UserUseCases {
         };
         // Remove undefined keys
         Object.keys(updateData).forEach(
-          (key) => updateData[key] === undefined && delete updateData[key]
+          (key) => updateData[key] === undefined && delete updateData[key],
         );
 
         let updatedUser = await this.userRepository.update(
           existingUser.id,
-          updateData
+          updateData,
         );
         updatedUser = this._decryptUser(updatedUser);
+        await this.userRepository.updateLastLogin(updatedUser.id);
 
         const { token, loginHistory } = await this.generateToken(updatedUser, device, ip);
+        const refreshToken = this.generateRefreshToken();
+        await this.storeRefreshToken(updatedUser, refreshToken);
+
         return {
           user: updatedUser,
-          token,
           loginHistory,
+          token,
+          refreshToken,
           oauth: true,
+          register: false,
           message: "Login successful",
         };
       }
@@ -118,14 +156,19 @@ export class UserUseCases {
 
       let createdUser = await this.userRepository.createUser(userToSave);
       createdUser = this._decryptUser(createdUser);
+      await this.userRepository.updateLastLogin(createdUser.id);
 
       const { token, loginHistory } = await this.generateToken(createdUser, device, ip);
+      const refreshToken = this.generateRefreshToken();
+      await this.storeRefreshToken(createdUser, refreshToken);
 
       return {
         user: createdUser,
         token,
         loginHistory,
+        refreshToken,
         oauth: true,
+        register: true,
         message: "Registration successful",
       };
     }
@@ -144,7 +187,11 @@ export class UserUseCases {
 
     if (existingUser) {
       if (existingUser.active === false) {
-        throw new Error("Login blocked by admin");
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          throw new Error("Login blocked by admin");
+        }
       }
 
       await this.otpRepository.createOTP(otp);
@@ -153,6 +200,7 @@ export class UserUseCases {
       return {
         user: existingUser,
         oauth: false,
+        register: false,
         message: "OTP sent for verification",
       };
     }
@@ -172,6 +220,7 @@ export class UserUseCases {
     return {
       user: createdUser,
       oauth: false,
+      register: true,
       message: "OTP sent for verification",
     };
   }
@@ -216,11 +265,16 @@ export class UserUseCases {
 
     if (user.oauth === true) {
       const { token, loginHistory } = await this.generateToken(user, device, ip);
+      const refreshToken = this.generateRefreshToken();
+      await this.storeRefreshToken(user, refreshToken);
+
       return {
         success: true,
         token,
         loginHistory,
+        refreshToken,
         oauth: true,
+        register: false,
         message: "OAuth user verified successfully",
       };
     }
@@ -240,15 +294,39 @@ export class UserUseCases {
     verifiedUser = this._decryptUser(verifiedUser);
 
     await this.otpRepository.updateOTP(encryptedEmail, false);
+    await this.userRepository.updateLastLogin(verifiedUser.id);
 
     const { token, loginHistory } = await this.generateToken(verifiedUser, device, ip);
 
+    const refreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(verifiedUser, refreshToken);
+
+    const wasActive = verifiedUser.active; // Capture previous state - WAIT. user is ALREADY verified and active by line 284.
+    // Wait, line 284: let verifiedUser = await this.userRepository.verifyEmail(encryptedEmail);
+    // This typically sets verified and active to true.
+    // So I need to capture state BEFORE line 284?
+    // In `verifyUser` function at line 250:
+    // line 252: let user = await this.userRepository.findByEmail(encryptedEmail);
+    // line 253: if (user) ...
+    // So 'user' holds the state BEFORE verification.
+
+    // Logic:
+    // If 'user.active' was false (or user.isVerified was false), then this is a NEW registration (completing verification).
+    // If 'user.active' was true, then this is a Login (just checking OTP).
+
+    // However, verifyUser is specifically for verifying email/OTP.
+    // If it's a login flow (login -> send OTP -> verify OTP), the user is ALREADY active.
+    // If it's a register flow (register -> send OTP -> verify OTP), the user is NOT active yet (or verified).
+
+    const isNewRegistration = !user.active; // using the 'user' fetch at start of function
 
     return {
       success: true,
       token,
       loginHistory,
+      refreshToken,
       oauth: false,
+      register: isNewRegistration,
       message: "OTP verified successfully",
     };
   }
@@ -264,7 +342,11 @@ export class UserUseCases {
       }
 
       if (existingUser.active === false) {
-        return { success: false, message: "Login blocked by admin" };
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          return { success: false, message: "Login blocked by admin" };
+        }
       }
 
       if (["google", "apple"].includes(existingUser.signupMethod)) {
@@ -316,7 +398,7 @@ export class UserUseCases {
         sessionId: loginHistory.id
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "1h" },
     );
 
     console.log(token, loginHistory)
@@ -385,5 +467,41 @@ export class UserUseCases {
   async deleteUser(id) {
     const user = await this.userRepository.deleteUser(id);
     return user;
+  }
+
+  async refreshToken(incomingRefreshToken) {
+    if (!incomingRefreshToken) {
+      throw new Error("Refresh Token missing");
+    }
+
+    const hashedIncoming = hashToken(incomingRefreshToken);
+    const existingToken =
+      await this.userRepository.findRefreshToken(hashedIncoming);
+
+    if (!existingToken) {
+      throw new Error("Invalid Refresh Token");
+    }
+
+    if (existingToken.revoked || new Date() > existingToken.expiresAt) {
+      throw new Error("Refresh Token invalid or expired");
+    }
+
+    const user = await this.userRepository.findById(existingToken.userId);
+    if (!user) throw new Error("User not found");
+    const decryptedUser = this._decryptUser(user);
+
+    // Rotation: Revoke old
+    await this.userRepository.revokeRefreshToken(existingToken.id);
+
+    const newAccessToken = this.generateToken(decryptedUser);
+    const newRefreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(decryptedUser, newRefreshToken);
+
+    return {
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: decryptedUser,
+      success: true,
+    };
   }
 }

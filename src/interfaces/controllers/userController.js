@@ -120,15 +120,29 @@ export class UserController {
           success: true,
           message: result.message,
           token: result.token,
-          loginHistory: result.loginHistory
+          loginHistory: result.loginHistory,
+          refreshToken: result.refreshToken,
+          register: result.register,
           // user: result.user,
           // oauth: true
         });
       } else {
         return reply.code(201).send({
           success: true,
+          token: result.token,
+          // For non-oauth (OTP flow), register usually just sends OTP.
+          // But if auto-login is enabled after register, we need tokens.
+          // userUseCases.registerUser returns tokens if oauth=true, or "OTP sent" if oauth=false.
+          // IF oauth is false, result.token is UNDEFINED usually (unless immediate login).
+          // But looking at code: registerUser returns { token, refreshToken, oauth: true } for oauth.
+          // For non-oauth, it returns { message: "OTP sent" }.
+          // So line 122 matches oauth flow.
+          // Line 127 is for else (JSON.parse(result.oauth) is false).
+          // If false, result is { message: "OTP sent" }. No token.
+          // So I don't need to add refreshToken here for OTP flow.
           message: result.message,
-          loginHistory: result.loginHistory
+          loginHistory: result.loginHistory,
+          register: result.register,
           // user: result.user,
           // oauth: false
         });
@@ -157,6 +171,7 @@ export class UserController {
         message: result.message,
         token: result.token,
         oauth: result.oauth,
+        register: result.register,
       });
     } catch (error) {
       console.log(error)
@@ -189,7 +204,7 @@ export class UserController {
       const userDTO = new CreateUserDTO(request.body);
       const result = await this.userUseCases.login(
         userDTO.email,
-        userDTO.oauth
+        userDTO.oauth,
       );
 
       // Handle different response structures based on success and OAuth status
@@ -198,6 +213,7 @@ export class UserController {
           success: true,
           message: result.message,
           token: result.token,
+          refreshToken: result.refreshToken, // Add refresh token to response
           oauth: result.oauth,
         });
       } else {
@@ -237,6 +253,24 @@ export class UserController {
       return reply.code(500).send({
         success: false,
         message: error.message || "Internal server error",
+      })
+    }
+  }
+  async refresh(request, reply) {
+    try {
+      const { refreshToken } = request.body;
+      const result = await this.userUseCases.refreshToken(refreshToken);
+
+      return reply.code(200).send({
+        success: true,
+        token: result.token,
+        refreshToken: result.refreshToken,
+        user: result.user,
+      });
+    } catch (error) {
+      return reply.code(401).send({
+        success: false,
+        message: error.message || "Invalid Refresh Token",
       });
     }
   }
@@ -244,7 +278,31 @@ export class UserController {
   async getUserById(request, reply) {
     try {
       const { id } = request.params;
+      const requestingUser = request.user;
+
       const user = await this.userUseCases.getUserById(id);
+
+      if (!user) {
+        return reply
+          .code(404)
+          .send({ success: false, message: "User not found" });
+      }
+
+      // Authorization & Privacy Logic
+      // If the requesting user is NOT the owner, filter private data
+      if (!requestingUser || String(requestingUser.id) !== String(user.id)) {
+        return reply.code(200).send({
+          success: true,
+          user: {
+            id: user.id,
+            name: user.name,
+            image: user.image,
+            // Do NOT expose email, subscription details, etc.
+          },
+        });
+      }
+
+      // If owner, return full data
       return reply.code(200).send({
         success: true,
         user,
@@ -261,6 +319,17 @@ export class UserController {
     try {
       const userDTO = new CreateUserDTO(request.body);
       const { id } = request.params;
+      const requestingUser = request.user || request.body.user; // Use request.user from middleware if available
+
+      // Authorization Check: Ensure user updates their own profile
+      if (!requestingUser || String(requestingUser.id) !== String(id)) {
+        return reply.code(403).send({
+          success: false,
+          message: "Unauthorized: You can only update your own profile",
+        });
+      }
+
+      userDTO.id = id;
       const user = await this.userUseCases.updateUser(id, userDTO);
 
       return reply.code(200).send({

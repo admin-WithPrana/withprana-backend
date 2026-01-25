@@ -14,6 +14,8 @@ import { userTagsRoutes } from "./userTagRoutes.js";
 import { setupSubscriptionRoutes } from "./subscriptionRoutes.js";
 import { settingsRoutes } from './settingsRoute.js';
 import { registerProtectedRoute } from "../../infrastructure/services/registerProtectedRoute.js";
+import { settingsRoutes } from "./settingsRoute.js";
+import { dashboardRoutes } from "./dashboardRoutes.js";
 
 export async function registerRoutes(app, deps) {
   // ------------------------ PUBLIC ROUTES ------------------------
@@ -107,4 +109,4 @@ export async function registerRoutes(app, deps) {
   registerProtectedRoute(app, "/api/settings", settingsRoutes, {
     prismaRepository: deps.prismaRepository,
   });
-}
+
