@@ -13,29 +13,43 @@ async function fixSchema() {
     // And systemDeactivated (camelCase).
 
     // We use executeRawUnsafe to run the ALTER TABLE
-    const result = await prisma.$executeRawUnsafe(`
-      ALTER TABLE "users" 
-      ADD COLUMN IF NOT EXISTS "systemDeactivated" BOOLEAN NOT NULL DEFAULT false;
-    `);
-
-    // Also adding fcm_token based on new error
-    const result2 = await prisma.$executeRawUnsafe(`
-      ALTER TABLE "users" 
-      ADD COLUMN IF NOT EXISTS "fcm_token" TEXT;
-    `);
-
-    // Create refresh_tokens table (missing per user report)
-    const result3 = await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "refresh_tokens" (
-        "id" TEXT NOT NULL,
-        "token" TEXT NOT NULL,
-        "userId" BIGINT NOT NULL,
-        "expiresAt" TIMESTAMP(3) NOT NULL,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "revoked" BOOLEAN NOT NULL DEFAULT false,
-        CONSTRAINT "refresh_tokens_pkey" PRIMARY KEY ("id")
+    // Fix OTPs ID sequence
+    console.log("Fixing OTP id sequence...");
+    try {
+      await prisma.$executeRawUnsafe(
+        `CREATE SEQUENCE IF NOT EXISTS otps_id_seq;`,
       );
-    `);
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE "otps" ALTER COLUMN "id" SET DEFAULT nextval('otps_id_seq');`,
+      );
+      await prisma.$executeRawUnsafe(
+        `ALTER SEQUENCE otps_id_seq OWNED BY "otps"."id";`,
+      );
+
+      // Also ensure categories/admins have it? The error was specific to Otp.
+      // But might as well fix Admin if present. admin id is Int. Users is BigInt.
+
+      console.log("OTP sequence fixed.");
+    } catch (e) {
+      console.log(
+        "Error fixing OTP sequence (might already exist):",
+        e.message,
+      );
+    }
+    // Inspect OTPs table schema
+    const result = await prisma.$queryRaw`
+      SELECT column_name, data_type, column_default, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'otps';
+    `;
+
+    console.log("OTPs Table Schema:", result);
+
+    // Check sequences
+    const sequences = await prisma.$queryRaw`
+      SELECT * FROM information_schema.sequences;
+    `;
+    // console.log('Sequences:', sequences); // might be noisy
 
     // Add indices/constraints separately to avoid errors if they exist
     try {
