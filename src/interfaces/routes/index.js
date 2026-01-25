@@ -10,171 +10,98 @@ import { thoughtRoutes } from "./thoughOfTheDayRoute.js";
 import { playlistRoutes } from "./playListRoutes.js";
 import { policyRoutes } from "./privacyPolicyRoutes.js";
 import { onboardingRoutes } from "./onBoardingRoutes.js";
-import {userTagsRoutes} from "./userTagRoutes.js"
-import {setupSubscriptionRoutes}  from "./subscriptionRoutes.js"
-import {settingsRoutes} from './settingsRoute.js'
+import { userTagsRoutes } from "./userTagRoutes.js";
+import { setupSubscriptionRoutes } from "./subscriptionRoutes.js";
+import { settingsRoutes } from './settingsRoute.js';
+import { registerProtectedRoute } from "../../infrastructure/services/registerProtectedRoute.js";
 
 export async function registerRoutes(app, deps) {
-  app.register(
-    async function (userScope) {
-      setupRoutes(userScope, {
-        prismaRepository: deps.prismaRepository,
-        mailer: deps.mailer,
-      });
-    },
-    { prefix: "/api/user" }
-  );
+  // ------------------------ PUBLIC ROUTES ------------------------
+  app.register(async function (authScope) {
+    authRoutes(authScope, {
+      prismaRepository: deps.prismaRepository,
+      mailer: deps.mailer,
+    });
+  }, { prefix: "/api/auth" });
 
-  app.register(
-    async function (adminScope) {
-      adminRoutes(adminScope, {
-        prismaRepository: deps.prismaRepository,
-      });
-    },
-    { prefix: "/api/admin" }
-  );
+  app.register(async function (subscriptionScope) {
+    setupSubscriptionRoutes(subscriptionScope, {
+      prismaRepository: deps.prismaRepository,
+      userRepository: deps.userRepository || {
+        findById: (id) =>
+          deps.prismaRepository.prisma.user.findUnique({ where: { id: BigInt(id) } }),
+        updateUserStripeCustomerId: (userId, stripeCustomerId) =>
+          deps.prismaRepository.prisma.user.update({ where: { id: BigInt(userId) }, data: { stripeCustomerId } }),
+        updateUserSubscriptionType: (userId, subscriptionType) => {
+          const id = typeof userId === 'bigint' ? Number(userId) : Number(userId);
+          return deps.prismaRepository.prisma.user.update({
+            where: { id },
+            data: { subscriptionType: subscriptionType.toUpperCase() }
+          });
+        }
+      }
+    });
+  }, { prefix: "/api/subscriptions" });
 
-  app.register(
-    async function (authScope) {
-      authRoutes(authScope, {
-        prismaRepository: deps.prismaRepository,
-        mailer: deps.mailer,
-      });
-    },
-    { prefix: "/api/auth" }
-  );
+  // ------------------------ PROTECTED ROUTES ------------------------
 
-  app.register(
-    async function (categoryScope) {
-      categoryRoutes(categoryScope, {
-        prismaRepository: deps.prismaRepository,
-      });
-    },
-    { prefix: "/api/category" }
-  );
+  registerProtectedRoute(app, "/api/user", setupRoutes, {
+    prismaRepository: deps.prismaRepository,
+    mailer: deps.mailer,
+  });
 
-  app.register(
-    async function (meditationScope) {
-      meditationRoutes(meditationScope, {
-        prismaRepository: deps.prismaRepository,
-        mongoRepository: deps.mongoRepository,
-        meditationQueue:deps.meditationQueue
-      });
-    },
-    { prefix: "/api/meditation" }
-  );
+  registerProtectedRoute(app, "/api/admin", adminRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
 
-  app.register(
-    async function (subcategoryScope) {
-      subcategoryRoutes(subcategoryScope, {
-        prismaRepository: deps.prismaRepository,
-      });
-    },
-    { prefix: "/api/subcategory" }
-  );
+  registerProtectedRoute(app, "/api/category", categoryRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
 
-  app.register(
-    async function (tagsScope) {
-      tagsRoutes(tagsScope, {
-        prismaRepository: deps.prismaRepository,
-      });
-    },
-    { prefix: "/api/tags" }
-  );
+  registerProtectedRoute(app, "/api/meditation", meditationRoutes, {
+    prismaRepository: deps.prismaRepository,
+    mongoRepository: deps.mongoRepository,
+    meditationQueue: deps.meditationQueue,
+  });
 
-  app.register(
-    async function (likedScope) {
-      likedRoutes(likedScope, {
-        prismaRepository: deps.prismaRepository,
-      });
-    },
-    { prefix: "/api/liked" }
-  );
+  registerProtectedRoute(app, "/api/subcategory", subcategoryRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
 
-  app.register(
-    async function (thoughtScope) {
-      thoughtRoutes(thoughtScope, {
-        prismaRepository: deps.prismaRepository,
-        thoughtQueue: deps.thoughtQueue,
-      });
-    },
-    { prefix: "/api/thought" }
-  );
+  registerProtectedRoute(app, "/api/tags", tagsRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
 
-  app.register(
-    async function (playlistScope) {
-      playlistRoutes(playlistScope, {
-        prismaRepository: deps.prismaRepository,
-        postQueue: deps.postQueue,
-      });
-    },
-    { prefix: "/api/playlist" }
-  );
+  registerProtectedRoute(app, "/api/liked", likedRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
 
-  app.register(
-    async function (privacyPolicyScope) {
-      policyRoutes(privacyPolicyScope, {
-        prismaRepository: deps.prismaRepository,
-        postQueue: deps.postQueue,
-      });
-    },
-    { prefix: "/api/privacy-policy" }
-  );
+  registerProtectedRoute(app, "/api/thought", thoughtRoutes, {
+    prismaRepository: deps.prismaRepository,
+    postQueue: deps.postQueue,
+  });
 
-  app.register(
-    async function (privacyPolicyScope) {
-      onboardingRoutes(privacyPolicyScope, {
-        prismaRepository: deps.prismaRepository,
-        postQueue: deps.postQueue,
-      });
-    },
-    { prefix: "/api/onboard" }
-  );
+  registerProtectedRoute(app, "/api/playlist", playlistRoutes, {
+    prismaRepository: deps.prismaRepository,
+    postQueue: deps.postQueue,
+  });
 
-  app.register(
-    async function (tagsScope) {
-      userTagsRoutes(tagsScope, {
-        prismaRepository: deps.prismaRepository,
-      });
-    },
-    { prefix: "/api/usertags" }
-  );
+  registerProtectedRoute(app, "/api/privacy-policy", policyRoutes, {
+    prismaRepository: deps.prismaRepository,
+    postQueue: deps.postQueue,
+  });
 
-  // app.register(
-  //   async function (tagsScope) {
-  //     setupSubscriptionRoutes(tagsScope, {
-  //       prismaRepository: deps.prismaRepository,
-  //     });
-  //   },
-  //   { prefix: "/api/subscriptions" }
-  // );
-  app.register(
-    async function (subscriptionScope) {
-      const userRepository = deps.userRepository || {
-        findById: (id) => deps.prismaRepository.prisma.user.findUnique({ 
-          where: { id: BigInt(id) } 
-        }),
-        updateUserStripeCustomerId: (userId, stripeCustomerId) => 
-          deps.prismaRepository.prisma.user.update({
-            where: { id: BigInt(userId) },
-            data: { stripeCustomerId }
-          }),
-      };
-  
-      setupSubscriptionRoutes(subscriptionScope, {
-        prismaRepository: deps.prismaRepository,
-        userRepository: userRepository,
-      });
-    },
-    { prefix: "/api/subscriptions" }
-  );
+  registerProtectedRoute(app, "/api/onboard", onboardingRoutes, {
+    prismaRepository: deps.prismaRepository,
+    postQueue: deps.postQueue,
+  });
 
-   app.register(
-    async function (settingsScope) {
-      settingsRoutes(settingsScope, {
-        prismaRepository: deps.prismaRepository,
-      });
-    },
-    { prefix: "/api/settings" }
-  );
+  registerProtectedRoute(app, "/api/usertags", userTagsRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
+
+
+  registerProtectedRoute(app, "/api/settings", settingsRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
 }

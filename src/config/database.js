@@ -3,11 +3,23 @@ import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
 import { PrismaUserRepository } from '../infrastructure/databases/postgres/userRepository.js';
 import { MongoUserRepository } from '../infrastructure/databases/mongo/userRepository.js';
+import { auditMiddleware } from '../interfaces/middleware/auditMiddleware.js';
 
 dotenv.config();
 
 export let prisma;
 export let mongoClient;
+
+let currentUserId = null;
+
+export function setPrismaUser(userId) {
+  currentUserId = userId;
+}
+
+export function getPrismaUser() {
+  return currentUserId;
+}
+
 
 export const createPrismaUserRepository = () => {
   if (!prisma) throw new Error('Prisma client not initialized');

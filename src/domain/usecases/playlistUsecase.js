@@ -19,26 +19,26 @@ export class PlaylistUsecase {
     }
   }
 
-//   async getPlaylistById(id) {
-//     try {
-//       return await this.repo.findById(id);
-//     } catch (err) {
-//       throw new Error(`Usecase Error (getPlaylistById): ${err.message}`);
-//     }
-//   }
- async getPlaylistById(id, paginationOptions = {}) {
-  try {
-    const playlist = await this.repo.getPlaylistById(id, paginationOptions);
-    
-    if (!playlist) {
-      throw new Error("Playlist not found");
+  //   async getPlaylistById(id) {
+  //     try {
+  //       return await this.repo.findById(id);
+  //     } catch (err) {
+  //       throw new Error(`Usecase Error (getPlaylistById): ${err.message}`);
+  //     }
+  //   }
+  async getPlaylistById(id, paginationOptions = {}) {
+    try {
+      const playlist = await this.repo.getPlaylistById(id, paginationOptions);
+
+      if (!playlist) {
+        throw new Error("Playlist not found");
+      }
+
+      return playlist;
+    } catch (err) {
+      throw new Error(`Usecase Error (getPlaylistById): ${err.message}`);
     }
-    
-    return playlist;
-  } catch (err) {
-    throw new Error(`Usecase Error (getPlaylistById): ${err.message}`);
   }
-}
 
   async getAll(where = {}, skip, take) {
     try {
@@ -59,9 +59,20 @@ export class PlaylistUsecase {
 
   async addMeditationsToPlaylist(playlistId, meditationIds) {
     try {
+      const playlist = await this.repo.findById(playlistId);
+      if (!playlist) {
+        throw new Error("Playlist not found");
+      }
       return await this.repo.addMeditations(playlistId, meditationIds);
     } catch (err) {
-      throw new Error(`Usecase Error (addMeditationsToPlaylist): ${err.message}`);
+      if (err.message === "Playlist not found") {
+        throw new Error(
+          "Usecase Error (addMeditationsToPlaylist): Playlist not found"
+        );
+      }
+      throw new Error(
+        `Usecase Error (addMeditationsToPlaylist): ${err.message}`
+      );
     }
   }
 
@@ -69,7 +80,9 @@ export class PlaylistUsecase {
     try {
       return await this.repo.removeMeditation(playlistId, meditationId);
     } catch (err) {
-      throw new Error(`Usecase Error (removeMeditationFromPlaylist): ${err.message}`);
+      throw new Error(
+        `Usecase Error (removeMeditationFromPlaylist): ${err.message}`
+      );
     }
   }
 }
