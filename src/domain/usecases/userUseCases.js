@@ -67,7 +67,7 @@ export class UserUseCases {
 
   async registerUser(userData) {
     const user = new User({
-      email: userData.email,
+      email: userData.email.toLowerCase(),
       name: userData.name,
       image: userData.image,
       oauth: userData.oauth,

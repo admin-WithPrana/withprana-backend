@@ -18,30 +18,47 @@ export async function authMiddleware(req, res) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await userRepository.findById(decoded.id);
 
-    if (!user) {
-      return res.code(401).send({ message: "User not found" });
-    }
+    let user;
 
-    if (user.active === false) {
-      return res.code(403).send({ message: "User account is inactive" });
+    if (decoded.isSuper !== undefined) {
+      // Admin Logic
+      user = await prisma.admin.findUnique({
+        where: { id: decoded.id },
+      });
+
+      if (!user) {
+        return res.code(401).send({ message: "Admin not found" });
+      }
+
+      if (user.active === false) {
+        return res.code(403).send({ message: "Admin account is inactive" });
+      }
+    } else {
+      // User Logic
+      user = await userRepository.findById(decoded.id);
+
+      if (!user) {
+        return res.code(401).send({ message: "User not found" });
+      }
+
+      if (user.active === false) {
+        return res.code(403).send({ message: "User account is inactive" });
+      }
     }
 
     req.user = user;
 
     if (typeof req.body === "object" && req.body !== null) {
       req.body.email = user.email;
-      req.body.name = user.name;
+      // req.body.name = user.name; // user.name might not exist on admin
       req.body.user = user;
     } else {
       req.body = {
         email: user.email,
-        name: user.name,
         user: user,
       };
     }
-
   } catch (err) {
     console.error("Auth Middleware Error:", err);
     return res.code(403).send({ message: "Invalid or expired token" });
