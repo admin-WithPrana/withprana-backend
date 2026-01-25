@@ -10,8 +10,9 @@ export class CreateUserDTO {
 }
 
 export class VerifyUserDTO {
-  constructor({ email, otp }) {
+  constructor({ email, otp, device }) {
     this.email = email;
     this.otp = otp;
+    this.device = device
   }
 }

@@ -106,8 +106,8 @@ import { UserUseCases } from "../../domain/usecases/userUseCases.js";
 import { CreateUserDTO, VerifyUserDTO } from "../dtos/userDTO.js";
 
 export class UserController {
-  constructor(userRepository, otpRepository, mailer) {
-    this.userUseCases = new UserUseCases(userRepository, otpRepository, mailer);
+  constructor(userRepository, otpRepository, mailer, loginHistoryRepository) {
+    this.userUseCases = new UserUseCases(userRepository, otpRepository, mailer, loginHistoryRepository);
   }
 
   async register(request, reply) {
@@ -120,6 +120,7 @@ export class UserController {
           success: true,
           message: result.message,
           token: result.token,
+          loginHistory: result.loginHistory
           // user: result.user,
           // oauth: true
         });
@@ -127,11 +128,13 @@ export class UserController {
         return reply.code(201).send({
           success: true,
           message: result.message,
+          loginHistory: result.loginHistory
           // user: result.user,
           // oauth: false
         });
       }
     } catch (error) {
+      console.log(error)
       return reply.code(400).send({
         success: false,
         message: error.message,
@@ -144,7 +147,9 @@ export class UserController {
       const verifyDTO = new VerifyUserDTO(request.body);
       const result = await this.userUseCases.verifyUser(
         verifyDTO.email,
-        verifyDTO.otp
+        verifyDTO.otp,
+        verifyDTO.device,
+        request?.ip
       );
 
       return reply.code(200).send({
@@ -154,6 +159,7 @@ export class UserController {
         oauth: result.oauth,
       });
     } catch (error) {
+      console.log(error)
       return reply.code(400).send({
         success: false,
         message: error.message,

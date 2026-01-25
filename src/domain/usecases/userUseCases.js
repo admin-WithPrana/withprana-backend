@@ -8,10 +8,11 @@ import {
 } from "../../utils/encryption.js";
 
 export class UserUseCases {
-  constructor(userRepo, otpRepository, mailer) {
+  constructor(userRepo, otpRepository, mailer, loginHistoryRepository) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
     this.mailer = mailer;
+    this.loginHistoryRepository = loginHistoryRepository
   }
 
   subscriptionType = ["free", "premium", "enterprise"];
@@ -118,11 +119,12 @@ export class UserUseCases {
       let createdUser = await this.userRepository.createUser(userToSave);
       createdUser = this._decryptUser(createdUser);
 
-      const token = this.generateToken(createdUser, device, ip);
+      const { token, loginHistory } = this.generateToken(createdUser, device, ip);
 
       return {
         user: createdUser,
         token,
+        loginHistory,
         oauth: true,
         message: "Registration successful",
       };
@@ -203,7 +205,7 @@ export class UserUseCases {
     return { success: true, message: "OTP resent successfully" };
   }
 
-  async verifyUser(email, otpCode) {
+  async verifyUser(email, otpCode, device, ip) {
     const encryptedEmail = encryptDeterministic(email);
     let user = await this.userRepository.findByEmail(encryptedEmail);
     if (user) user = this._decryptUser(user);
@@ -213,10 +215,11 @@ export class UserUseCases {
     }
 
     if (user.oauth === true) {
-      const token = this.generateToken(user);
+      const { token, loginHistory } = this.generateToken(user, device, ip);
       return {
         success: true,
         token,
+        loginHistory,
         oauth: true,
         message: "OAuth user verified successfully",
       };
@@ -238,11 +241,12 @@ export class UserUseCases {
 
     await this.otpRepository.updateOTP(encryptedEmail, false);
 
-    const token = this.generateToken(verifiedUser);
+    const { token, loginHistory } = this.generateToken(verifiedUser, device, ip);
 
     return {
       success: true,
       token,
+      loginHistory,
       oauth: false,
       message: "OTP verified successfully",
     };
@@ -294,10 +298,11 @@ export class UserUseCases {
   }
 
   async generateToken(user, device, ip) {
+    console.log(user, ip, device)
     const loginHistory = await this.loginHistoryRepository.create({
       userId: user.id,
       role: "USER",
-      ipAddress: ip,
+      ipAddress: ip || "",
       device: device || null,
       isActive: true
     });

@@ -43,12 +43,15 @@ export async function registerRoutes(app, deps) {
     });
   }, { prefix: "/api/subscriptions" });
 
-  // ------------------------ PROTECTED ROUTES ------------------------
 
-  registerProtectedRoute(app, "/api/user", setupRoutes, {
-    prismaRepository: deps.prismaRepository,
-    mailer: deps.mailer,
-  });
+  app.register(async function (setupScope) {
+    setupRoutes(setupScope, {
+      prismaRepository: deps.prismaRepository,
+      mailer: deps.mailer,
+    });
+  }, { prefix: "/api/user" });
+
+  // ------------------------ PROTECTED ROUTES ------------------------
 
   registerProtectedRoute(app, "/api/admin", adminRoutes, {
     prismaRepository: deps.prismaRepository,
