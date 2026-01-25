@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, { decode } from "jsonwebtoken";
 
 export async function authMiddleware(req, reply) {
   try {
@@ -12,9 +12,12 @@ export async function authMiddleware(req, reply) {
     }
 
     const token = authHeader.split(" ")[1];
+    console.log(token)
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    console.log(decode)
 
     // Attach user to request
     req.user = decoded;

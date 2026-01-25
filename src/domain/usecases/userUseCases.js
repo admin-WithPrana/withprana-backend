@@ -97,7 +97,7 @@ export class UserUseCases {
         );
         updatedUser = this._decryptUser(updatedUser);
 
-        const { token, loginHistory } = this.generateToken(updatedUser, device, ip);
+        const { token, loginHistory } = await this.generateToken(updatedUser, device, ip);
         return {
           user: updatedUser,
           token,
@@ -119,7 +119,7 @@ export class UserUseCases {
       let createdUser = await this.userRepository.createUser(userToSave);
       createdUser = this._decryptUser(createdUser);
 
-      const { token, loginHistory } = this.generateToken(createdUser, device, ip);
+      const { token, loginHistory } = await this.generateToken(createdUser, device, ip);
 
       return {
         user: createdUser,
@@ -215,7 +215,7 @@ export class UserUseCases {
     }
 
     if (user.oauth === true) {
-      const { token, loginHistory } = this.generateToken(user, device, ip);
+      const { token, loginHistory } = await this.generateToken(user, device, ip);
       return {
         success: true,
         token,
@@ -241,7 +241,8 @@ export class UserUseCases {
 
     await this.otpRepository.updateOTP(encryptedEmail, false);
 
-    const { token, loginHistory } = this.generateToken(verifiedUser, device, ip);
+    const { token, loginHistory } = await this.generateToken(verifiedUser, device, ip);
+
 
     return {
       success: true,
@@ -298,7 +299,6 @@ export class UserUseCases {
   }
 
   async generateToken(user, device, ip) {
-    console.log(user, ip, device)
     const loginHistory = await this.loginHistoryRepository.create({
       userId: user.id,
       role: "USER",
@@ -319,6 +319,7 @@ export class UserUseCases {
       { expiresIn: "1h" }
     );
 
+    console.log(token, loginHistory)
     return {
       token,
       loginHistory
@@ -345,6 +346,16 @@ export class UserUseCases {
       users.data = users.data.map((u) => this._decryptUser(u));
     }
     return users;
+  }
+
+  async logoutUser(userId) {
+    const loginHistory = await this.loginHistoryRepository.logoutLastForUser(userId);
+
+    if (!loginHistory) {
+      return null;
+    }
+
+    return loginHistory;
   }
 
   async getUserById(id) {

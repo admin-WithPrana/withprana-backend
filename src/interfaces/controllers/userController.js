@@ -214,6 +214,33 @@ export class UserController {
     }
   }
 
+
+  async logout(request, reply) {
+    try {
+      console.log("user", request.user)
+      const userId = request.user.id;
+
+      const result = await this.userUseCases.logoutUser(userId);
+
+      if (result && result.success !== false) {
+        return reply.code(200).send({
+          success: true,
+          message: "Logged out successfully",
+        });
+      }
+
+      return reply.code(400).send({
+        success: false,
+        message: "No active session found",
+      });
+    } catch (error) {
+      return reply.code(500).send({
+        success: false,
+        message: error.message || "Internal server error",
+      });
+    }
+  }
+
   async getUserById(request, reply) {
     try {
       const { id } = request.params;

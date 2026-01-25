@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, { decode } from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 
@@ -8,52 +8,47 @@ import { PrismaUserRepository } from "../../infrastructure/databases/postgres/us
 const prisma = new PrismaClient();
 const userRepository = new PrismaUserRepository(prisma);
 
-export async function authMiddleware(req, res, next) {
-  const authHeader = req.headers["authorization"];
+export async function authMiddleware(request, reply) {
+  const authHeader = request.headers.authorization;
 
   if (!authHeader) {
-    return res.status(401).json({ message: "Authorization header missing" });
+    return reply.code(401).send({ message: "Authorization header missing" });
   }
 
   const token = authHeader.split(" ")[1];
 
   if (!token) {
-    return res.status(401).json({ message: "Not authorized" });
+    return reply.code(401).send({ message: "Not authorized" });
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Fetch user from DB using the ID from token.
-    // The repository's findById method handles the decryption logic correctly.
     const user = await userRepository.findById(decoded.id);
 
     if (!user) {
-      return res.status(401).json({ message: "User not found" });
+      return reply.code(401).send({ message: "User not found" });
     }
 
     if (user.active === false) {
-      return res.status(403).json({ message: "User account is inactive" });
+      return reply.code(403).send({ message: "User account is inactive" });
     }
 
-    req.user = user;
+    request.user = user;
 
-    // Populate body for backward compatibility / controller convenience
-    if (typeof req.body === "object" && req.body !== null) {
-      req.body.email = user.email;
-      req.body.name = user.name;
-      req.body.user = user;
+    if (typeof request.body === "object" && request.body !== null) {
+      request.body.email = user.email;
+      request.body.name = user.name;
+      request.body.user = user;
     } else {
-      req.body = {
+      request.body = {
         email: user.email,
         name: user.name,
-        user: user,
+        user,
       };
     }
-
-    next();
   } catch (err) {
-    console.error("Auth Middleware Error:", err);
-    return res.status(403).json({ message: "Invalid or expired token" });
+    return reply.code(403).send({ message: "Invalid or expired token" });
   }
 }
+

@@ -141,8 +141,9 @@ export class PrismaUserRepository {
 
   async findById(id) {
     try {
+      const isNumberId = !isNaN(Number(id));
       const user = await this.prisma.user.findUnique({
-        where: { id: Number(id) },
+        where: { id: isNumberId ? Number(id) : id },
       });
       return this._decryptUser(user);
     } catch (error) {

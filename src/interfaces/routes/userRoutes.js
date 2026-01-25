@@ -3,6 +3,8 @@ import { PostgresOTPRepository } from "../../infrastructure/databases/postgres/o
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
 import fastifyMultipart from "@fastify/multipart";
 import { LoginHistoryRepository } from "../../infrastructure/databases/postgres/loginHistoryRepository.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
+
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
@@ -66,7 +68,13 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post("/resend-otp", (request, reply) =>
     userController.resendOTP(request, reply)
   );
-  app.post("/login", (request, reply) => userController.login(request, reply));
+  app.post(
+    "/login",
+    (request, reply) => userController.login(request, reply)
+  );
+  app.post("/logout", { preHandler: authMiddleware }, (request, reply) =>
+    userController.logout(request, reply)
+  );
 
   app.get("/:id", (request, reply) =>
     userController.getUserById(request, reply)
