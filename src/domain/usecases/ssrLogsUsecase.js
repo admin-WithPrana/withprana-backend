@@ -23,4 +23,14 @@ export class SARLogUseCases {
             from: thirtyDaysAgo,
         });
     }
+
+    async findAll({ page = 1, limit = 10, status, sortField = "createdAt", sortOrder = "desc" }) {
+        return this.sarLogRepository.findAll({
+            page,
+            limit,
+            status,
+            sortField,
+            sortOrder,
+        });
+    }
 }

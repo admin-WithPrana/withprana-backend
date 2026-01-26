@@ -29,4 +29,32 @@ export class SARLogController {
             reply.status(500).send({ success: false, message: "Failed to fetch logs" });
         }
     }
+
+    async findAll(request, reply) {
+        try {
+            const {
+                page = 1,
+                limit = 10,
+                status,
+                sortField = "createdAt",
+                sortOrder = "desc",
+            } = request.query;
+
+            const parsedPage = parseInt(page, 10);
+            const parsedLimit = parseInt(limit, 10);
+
+            const result = await this.sarLogUseCases.findAll({
+                page: parsedPage,
+                limit: parsedLimit,
+                status: status,
+                sortField: sortField,
+                sortOrder: sortOrder,
+            });
+
+            reply.send({ success: true, logs: result.data, pagination: result.pagination });
+        } catch (error) {
+            console.error(error);
+            reply.status(500).send({ success: false, message: "Failed to fetch SAR logs" });
+        }
+    }
 }

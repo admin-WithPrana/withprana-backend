@@ -127,7 +127,7 @@ export class MeditationController {
     }
   }
 
-  async updateMeditationTime(req, reply) {
+  async   updateMeditationTime(req, reply) {
     try {
       const { id, ...data } = req.body;
       const result = await this.meditationUsecase.updateMeditationTime(id, data);

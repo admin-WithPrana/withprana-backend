@@ -62,14 +62,20 @@ inactivityWorker.on("failed", (job, err) => {
 });
 
 // ----------------- SAR Log Queue -----------------
-export const sarLogQueue = new Queue("sarLogQueue", { connection });
+export const sarLogQueue = new Queue("createSARLog", { connection });
 export const sarLogWorker = new Worker(
-  "sarLogQueue",
+  "createSARLog",
   async (job) => {
     const { userId, status } = job.data;
-    console.log(job.data)
 
-    await generateAndUploadLogsPDF(userId)
+    const url = await generateAndUploadLogsPDF(userId)
+    await prisma.sARLogRequest.create({
+      data: {
+        userId,
+        status,
+        doc: url
+      }
+    })
   },
   { connection }
 );

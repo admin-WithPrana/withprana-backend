@@ -13,4 +13,6 @@ export const sarLogRoutes = (app, { prismaRepository }) => {
 
     // Get last 30 days SAR logs for a user
     app.get('/:userId', (req, reply) => sarLogController.getLast30DaysLogs(req, reply));
+
+    app.get('/', (req, reply) => sarLogController.findAll(req, reply));
 };
