@@ -15,6 +15,7 @@ import { setupSubscriptionRoutes } from "./subscriptionRoutes.js";
 import { registerProtectedRoute } from "../../infrastructure/services/registerProtectedRoute.js";
 import { dashboardRoutes } from "./dashboardRoutes.js";
 import { settingsRoutes } from "./settingsRoute.js";
+import { sarLogRoutes } from "./ssrLogRoute.js";
 
 export async function registerRoutes(app, deps) {
   // ------------------------ PUBLIC ROUTES ------------------------
@@ -110,6 +111,10 @@ export async function registerRoutes(app, deps) {
   });
 
   registerProtectedRoute(app, "/api/dashboard", dashboardRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
+
+  registerProtectedRoute(app, "/api/sar-log", sarLogRoutes, {
     prismaRepository: deps.prismaRepository,
   });
 }

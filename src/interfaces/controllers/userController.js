@@ -233,7 +233,6 @@ export class UserController {
 
   async logout(request, reply) {
     try {
-      console.log("user", request.user)
       const userId = request.user.id;
 
       const result = await this.userUseCases.logoutUser(userId);

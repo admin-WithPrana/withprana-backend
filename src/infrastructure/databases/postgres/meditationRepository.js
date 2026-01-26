@@ -180,7 +180,7 @@
 //       };
 //       delete updateData.categoryId;
 //     }
-    
+
 //     if (data.subcategoryId !== undefined) {
 //       updateData.subcategory = {
 //         connect: { id: data.subcategoryId }
@@ -289,10 +289,10 @@
 //   async findByUserSelectedTags(userId, limit = 10, page = 1, sort, order) {
 //     try {
 //       console.log('Method called with:', { userId, limit, page, sort, order });
-  
+
 //       const userIdBigInt = BigInt(userId);
 //       const skip = (Number(page || 1) - 1) * Number(limit || 10);
-  
+
 //       // Fetch the user's selected tag IDs
 //       console.log('Fetching user tags...');
 //       const userTags = await this.prisma.userTag.findMany({
@@ -300,10 +300,10 @@
 //         select: { tagId: true }
 //       });
 //       console.log('User tags found:', userTags.length);
-  
+
 //       const tagIds = userTags.map(ut => ut.tagId);
 //       console.log('Tag IDs:', tagIds);
-  
+
 //       if (tagIds.length === 0) {
 //         console.log('No tags found for user');
 //         return {
@@ -316,7 +316,7 @@
 //           },
 //         };
 //       }
-  
+
 //       console.log('Executing parallel queries...');
 //       const [data, total] = await Promise.all([
 //         this.prisma.meditation.findMany({
@@ -353,16 +353,16 @@
 //           },
 //         }),
 //       ]);
-  
+
 //       console.log('Data found:', data.length);
 //       console.log('Total count:', total);
-  
+
 //       // Transform the data to include isLiked field
 //       const transformedData = data.map(meditation => ({
 //         ...meditation,
 //         isLiked: meditation.likedUsers.length > 0
 //       }));
-  
+
 //       return {
 //         data: transformedData,
 //         pagination: {
@@ -382,7 +382,7 @@
 //       throw error;
 //     }
 //   }
-  
+
 // }
 export class MeditationRepository {
   constructor(prisma) {
@@ -432,10 +432,12 @@ export class MeditationRepository {
         thumbnail: data.thumbnail,
         isPremium: data.isPremium,
         type: data?.type,
-        scheduledAt:data?.scheduledAt,
+        scheduledAt: data?.scheduledAt,
         active: data.active !== undefined ? data.active : true,
         category: {
-          connect: { id: Number(data.categoryId) }
+          connect: {
+            id: data.categoryId
+          }
         },
         ...(data.subcategoryId && {
           subcategory: {
@@ -546,7 +548,7 @@ export class MeditationRepository {
       };
       delete updateData.categoryId;
     }
-    
+
     if (data.subcategoryId !== undefined) {
       updateData.subcategory = {
         connect: { id: data.subcategoryId }
@@ -554,8 +556,8 @@ export class MeditationRepository {
       delete updateData.subcategoryId;
     }
 
-    if(data.isPremium){
-      updateData.isPremium=Boolean(data.isPremium)
+    if (data.isPremium) {
+      updateData.isPremium = Boolean(data.isPremium)
     }
 
     return this.prisma.meditation.update({
@@ -579,13 +581,13 @@ export class MeditationRepository {
   async findByUserSelectedTags(userId, limit = 10, page = 1, sort, order) {
     // Wait for prisma to be ready
     await this.ensurePrisma();
-    
+
     try {
       console.log('Method called with:', { userId, limit, page, sort, order });
-  
+
       const userIdBigInt = BigInt(userId);
       const skip = (Number(page || 1) - 1) * Number(limit || 10);
-  
+
       // Fetch the user's selected tag IDs
       console.log('Fetching user tags...');
       const userTags = await this.prisma.userTag.findMany({
@@ -593,10 +595,10 @@ export class MeditationRepository {
         select: { tagId: true }
       });
       console.log('User tags found:', userTags.length);
-  
+
       const tagIds = userTags.map(ut => ut.tagId);
       console.log('Tag IDs:', tagIds);
-  
+
       if (tagIds.length === 0) {
         console.log('No tags found for user');
         return {
@@ -609,7 +611,7 @@ export class MeditationRepository {
           },
         };
       }
-  
+
       console.log('Executing parallel queries...');
       const [data, total] = await Promise.all([
         this.prisma.meditation.findMany({
@@ -646,16 +648,16 @@ export class MeditationRepository {
           },
         }),
       ]);
-  
+
       console.log('Data found:', data.length);
       console.log('Total count:', total);
-  
+
       // Transform the data to include isLiked field
       const transformedData = data.map(meditation => ({
         ...meditation,
         isLiked: meditation.likedUsers.length > 0
       }));
-  
+
       return {
         data: transformedData,
         pagination: {
@@ -672,7 +674,7 @@ export class MeditationRepository {
         stack: error.stack,
         name: error.name
       });
-      
+
       // Return empty response instead of throwing in production
       if (process.env.NODE_ENV === 'production') {
         return {

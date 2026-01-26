@@ -4,7 +4,7 @@ export class SubcategoryRepository {
     }
 
     async create(data) {
-        return this.prisma.subcategory.create({ 
+        return this.prisma.subcategory.create({
             data: {
                 name: data.name,
                 color: data?.color || null,
@@ -25,7 +25,7 @@ export class SubcategoryRepository {
     }
 
     async findById(id) {
-        return this.prisma.subcategory.findUnique({ 
+        return this.prisma.subcategory.findUnique({
             where: { id },
             include: {
                 category: true,
@@ -44,7 +44,7 @@ export class SubcategoryRepository {
             where: {
                 active: true,
                 isDeleted: false,
-                categoryId:parseInt(categoryId)
+                categoryId: categoryId
             },
             include: {
                 category: true,
@@ -85,9 +85,9 @@ export class SubcategoryRepository {
     }
 
     async delete(id) {
-        return this.prisma.subcategory.update({ 
+        return this.prisma.subcategory.update({
             where: { id },
-            data: { 
+            data: {
                 isDeleted: true,
                 active: false,
                 updatedAt: new Date()
@@ -138,21 +138,21 @@ export class SubcategoryRepository {
     }
 
     async findByNameAndCategory(name, categoryId) {
-    return this.prisma.subcategory.findFirst({
-        where: {
-            name: {
-                equals: name,
-                mode: 'insensitive'
+        return this.prisma.subcategory.findFirst({
+            where: {
+                name: {
+                    equals: name,
+                    mode: 'insensitive'
+                },
+                categoryId,
+                active: true,
+                isDeleted: false
             },
-            categoryId,
-            active: true,
-            isDeleted: false
-        },
-        include: {
-            category: true
-        }
-    });
-    
-}
+            include: {
+                category: true
+            }
+        });
+
+    }
 
 }
