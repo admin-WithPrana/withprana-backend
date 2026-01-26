@@ -10,8 +10,8 @@ const connection = new IORedis({
   maxRetriesPerRequest: null,
 });
 
+// ----------------- Thought Queue -----------------
 export const thoughtQueue = new Queue("thoughtOfTheDayQueue", { connection });
-
 export const thoughtWorker = new Worker(
   "thoughtOfTheDayQueue",
   async (job) => {
@@ -23,13 +23,12 @@ export const thoughtWorker = new Worker(
   },
   { connection },
 );
-
 thoughtWorker.on("failed", (job, err) => {
   console.error(`Thought job failed ${job.id} with error: ${err.message}`);
 });
 
+// ----------------- Meditation Queue -----------------
 export const meditationQueue = new Queue("meditationQueue", { connection });
-
 export const meditationWorker = new Worker(
   "meditationQueue",
   async (job) => {
@@ -41,16 +40,15 @@ export const meditationWorker = new Worker(
   },
   { connection },
 );
-
 meditationWorker.on("failed", (job, err) => {
   console.error(`Meditation job failed ${job.id} with error: ${err.message}`);
 });
 
+// ----------------- Inactivity Queue -----------------
 import { InactivityService } from "../infrastructure/services/inactivityService.js";
+import { generateAndUploadLogsPDF } from "../utils/generateSSRLogs.js";
 const inactivityService = new InactivityService();
-
 export const inactivityQueue = new Queue("inactivityQueue", { connection });
-
 export const inactivityWorker = new Worker(
   "inactivityQueue",
   async (job) => {
@@ -59,7 +57,23 @@ export const inactivityWorker = new Worker(
   },
   { connection },
 );
-
 inactivityWorker.on("failed", (job, err) => {
   console.error(`Inactivity job failed ${job.id} with error: ${err.message}`);
+});
+
+// ----------------- SAR Log Queue -----------------
+export const sarLogQueue = new Queue("sarLogQueue", { connection });
+export const sarLogWorker = new Worker(
+  "sarLogQueue",
+  async (job) => {
+    const { userId, status } = job.data;
+    console.log(job.data)
+
+    await generateAndUploadLogsPDF(userId)
+  },
+  { connection }
+);
+
+sarLogWorker.on("failed", (job, err) => {
+  console.error(`SAR log job failed ${job.id} with error: ${err.message}`);
 });

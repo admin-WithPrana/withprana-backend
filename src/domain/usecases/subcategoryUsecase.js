@@ -15,7 +15,7 @@ export class SubcategoryUsecase {
                 throw new Error('Subcategory name must be between 2 and 50 characters');
             }
 
-            if (!categoryId || isNaN(categoryId)) {
+            if (!categoryId) {
                 throw new Error('Valid category ID is required');
             }
 
@@ -32,36 +32,37 @@ export class SubcategoryUsecase {
 
             return await this.subcategoryRepository.create(subcategoryData);
         } catch (error) {
+            console.log(error)
             throw new Error(`Failed to create subcategory: ${error.message}`);
         }
     }
 
     async getSubcategoryById(id) {
-    try {
-        if (!id || !isUuid(id)) {
-            throw new Error("Valid subcategory UUID is required");
+        try {
+            if (!id || !isUuid(id)) {
+                throw new Error("Valid subcategory UUID is required");
+            }
+
+            const subcategory = await this.subcategoryRepository.findById(id);
+
+            if (!subcategory) {
+                throw new Error("Subcategory not found");
+            }
+
+            if (subcategory.isDeleted) {
+                throw new Error("Subcategory has been deleted");
+            }
+
+            return subcategory;
+        } catch (error) {
+            throw new Error(`Failed to get subcategory: ${error.message}`);
         }
-
-        const subcategory = await this.subcategoryRepository.findById(id);
-
-        if (!subcategory) {
-            throw new Error("Subcategory not found");
-        }
-
-        if (subcategory.isDeleted) {
-            throw new Error("Subcategory has been deleted");
-        }
-
-        return subcategory;
-    } catch (error) {
-        throw new Error(`Failed to get subcategory: ${error.message}`);
     }
-}
 
     async getAllSubcategories(categoryId) {
         try {
             const subcategories = await this.subcategoryRepository.findAll(categoryId);
-            
+
             if (!subcategories || subcategories.length === 0) {
                 throw new Error('No subcategories found');
             }
@@ -75,8 +76,8 @@ export class SubcategoryUsecase {
     async updateSubcategory(id, data) {
         try {
             if (!id || !isUuid(id)) {
-            throw new Error("Valid subcategory UUID is required");
-        }
+                throw new Error("Valid subcategory UUID is required");
+            }
 
             const existingSubcategory = await this.getSubcategoryById(id);
 
@@ -109,9 +110,9 @@ export class SubcategoryUsecase {
 
     async deleteSubcategory(id) {
         try {
-             if (!id || !isUuid(id)) {
-            throw new Error("Valid subcategory UUID is required");
-        }
+            if (!id || !isUuid(id)) {
+                throw new Error("Valid subcategory UUID is required");
+            }
 
             await this.getSubcategoryById(id);
 
@@ -136,7 +137,7 @@ export class SubcategoryUsecase {
             }
 
             const subcategory = await this.subcategoryRepository.findById(id);
-            
+
             if (!subcategory) {
                 throw new Error('Subcategory not found');
             }

@@ -25,7 +25,7 @@ export class MeditationController {
         link,
         thumbnail,
         isPremium: isPremium === "true" || isPremium === true,
-        categoryId: Number(categoryId),
+        categoryId: categoryId,
         subcategoryId: subcategoryId || null,
         subcategoryId,
         type,
@@ -121,6 +121,16 @@ export class MeditationController {
     try {
       const id = req.params.id;
       const result = await this.meditationUsecase.deleteMeditation(id);
+      reply.send(result);
+    } catch (err) {
+      reply.status(400).send({ message: err.message });
+    }
+  }
+
+  async updateMeditationTime(req, reply) {
+    try {
+      const { id, ...data } = req.body;
+      const result = await this.meditationUsecase.updateMeditationTime(id, data);
       reply.send(result);
     } catch (err) {
       reply.status(400).send({ message: err.message });

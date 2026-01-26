@@ -4,10 +4,12 @@ import { MeditationController } from '../controllers/meditationController.js';
 import fastifyMultipart from '@fastify/multipart';
 import { uploadToS3 } from '../../infrastructure/services/uploadToS3.js';
 import { convertToHLS, removeFolder } from '../../infrastructure/services/convertToHLS.js';
+import { MeditationWatchHistoryRepository } from '../../infrastructure/databases/postgres/meditationHistoryRepository.js';
 
 export const meditationRoutes = async (app, { prismaRepository, meditationQueue }) => {
   const repo = new MeditationRepository(prismaRepository.prisma);
-  const usecase = new MeditationUsecase(repo, meditationQueue);
+  const watchHistoryRepo = new MeditationWatchHistoryRepository(prismaRepository.prisma)
+  const usecase = new MeditationUsecase(repo, watchHistoryRepo, meditationQueue);
   const controller = new MeditationController(usecase);
 
   app.register(fastifyMultipart, {
@@ -181,4 +183,5 @@ export const meditationRoutes = async (app, { prismaRepository, meditationQueue 
 
   // Get meditations by the current user's selected tags
   app.get('/by-user-tags', (req, reply) => controller.getByUserSelectedTags(req, reply));
+  app.put('/watch-time', (req, reply) => controller.updateMeditationTime(req, reply));
 };

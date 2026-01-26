@@ -123,6 +123,9 @@ export class MeditationUsecase {
     });
   }
 
+  async updateMeditationTime(id, data) {
+    return this.meditationWatchHistoryRepository.update(id, data)
+  }
   async getPopularMeditations(limit = 10) {
     return this.meditationRepository.findMostPopular(limit);
   }

@@ -70,6 +70,7 @@ model User {
   encryptedUserKey String?
   systemDeactivated Boolean        @default(false)
   fcmToken         String?        @map("fcm_token")
+  sarLogs  SARLogRequest[]
 
   @@map("users")
 }
@@ -430,4 +431,16 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model SARLogRequest {
+  id           String   @id @default(uuid())
+  userId       String
+  createdAt    DateTime @default(now())
+  status       String    @default("APPROVED")
+  doc          String
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sar_log_requests")
 }
