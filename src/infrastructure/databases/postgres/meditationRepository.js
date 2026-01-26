@@ -121,7 +121,7 @@
 // //       subcategory: true,
 // //       meditationTags: {
 // //         include: {
-// //           tag: true 
+// //           tag: true
 // //         }
 // //       }
 // //     },
@@ -388,36 +388,36 @@ export class MeditationRepository {
   constructor(prisma) {
     // Emergency fallback if prisma is not provided
     if (!prisma) {
-      console.warn('⚠️  Prisma not provided - attempting emergency import');
+      console.warn("⚠️  Prisma not provided - attempting emergency import");
       try {
         // Dynamic import as fallback
-        import('../../databases/postgres/prismaClient.js')
-          .then(module => {
+        import("../../databases/postgres/prismaClient.js")
+          .then((module) => {
             this.prisma = module.default;
-            console.log('✅ Emergency prisma import successful');
+            console.log("✅ Emergency prisma import successful");
           })
-          .catch(err => {
-            console.error('❌ Emergency import failed:', err);
-            throw new Error('Could not initialize Prisma client');
+          .catch((err) => {
+            console.error("❌ Emergency import failed:", err);
+            throw new Error("Could not initialize Prisma client");
           });
       } catch (error) {
-        console.error('❌ Emergency import error:', error);
+        console.error("❌ Emergency import error:", error);
         throw error;
       }
     } else {
       this.prisma = prisma;
-      console.log('✅ Prisma client set via constructor');
+      console.log("✅ Prisma client set via constructor");
     }
   }
 
   // Add a method to check if prisma is ready
   async ensurePrisma() {
     if (!this.prisma) {
-      console.log('⚠️  Waiting for prisma to initialize...');
-      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log("⚠️  Waiting for prisma to initialize...");
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
     if (!this.prisma) {
-      throw new Error('Prisma client not initialized');
+      throw new Error("Prisma client not initialized");
     }
   }
 
@@ -436,33 +436,34 @@ export class MeditationRepository {
         active: data.active !== undefined ? data.active : true,
         category: {
           connect: {
-            id: data.categoryId
-          }
+            id: data.categoryId,
+          },
         },
         ...(data.subcategoryId && {
           subcategory: {
-            connect: { id: data.subcategoryId }
-          }
+            connect: { id: data.subcategoryId },
+          },
         }),
-        ...(data.tags && data.tags.length > 0 && {
-          meditationTags: {
-            create: data.tags.map(tagId => ({
-              tag: {
-                connect: { id: tagId }
-              }
-            }))
-          }
-        })
+        ...(data.tags &&
+          data.tags.length > 0 && {
+            meditationTags: {
+              create: data.tags.map((tagId) => ({
+                tag: {
+                  connect: { id: tagId },
+                },
+              })),
+            },
+          }),
       },
       include: {
         category: true,
         subcategory: true,
         meditationTags: {
           include: {
-            tag: true
-          }
-        }
-      }
+            tag: true,
+          },
+        },
+      },
     });
   }
 
@@ -475,9 +476,9 @@ export class MeditationRepository {
         subcategory: true,
         meditationTags: {
           include: {
-            tag: true
-          }
-        }
+            tag: true,
+          },
+        },
       },
     });
   }
@@ -485,14 +486,14 @@ export class MeditationRepository {
   async getMeditationBySubCategoryId(id) {
     await this.ensurePrisma();
     return this.prisma.meditation.findMany({
-      where: { subcategoryId: id }
+      where: { subcategoryId: id },
     });
   }
 
   async getMeditationByCategoryId(id) {
     await this.ensurePrisma();
     return this.prisma.meditation.findMany({
-      where: { categoryId: Number(id) }
+      where: { categoryId: Number(id) },
     });
   }
 
@@ -506,16 +507,17 @@ export class MeditationRepository {
           isDeleted: false,
         },
         orderBy: {
-          [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+          [sort || "createdAt"]:
+            order?.toLowerCase() === "asc" ? "asc" : "desc",
         },
         include: {
           category: true,
           subcategory: true,
           meditationTags: {
             include: {
-              tag: true
-            }
-          }
+              tag: true,
+            },
+          },
         },
         take: Number(limit || 10),
         skip: Number(skip || 0),
@@ -541,23 +543,23 @@ export class MeditationRepository {
   async update(id, data) {
     await this.ensurePrisma();
     const updateData = { ...data };
-    console.log(data)
+    console.log(data);
     if (data.categoryId !== undefined) {
       updateData.category = {
-        connect: { id: Number(data.categoryId) }
+        connect: { id: Number(data.categoryId) },
       };
       delete updateData.categoryId;
     }
 
     if (data.subcategoryId !== undefined) {
       updateData.subcategory = {
-        connect: { id: data.subcategoryId }
+        connect: { id: data.subcategoryId },
       };
       delete updateData.subcategoryId;
     }
 
     if (data.isPremium) {
-      updateData.isPremium = Boolean(data.isPremium)
+      updateData.isPremium = Boolean(data.isPremium);
     }
 
     return this.prisma.meditation.update({
@@ -566,7 +568,7 @@ export class MeditationRepository {
       include: {
         category: true,
         subcategory: true,
-      }
+      },
     });
   }
 
@@ -583,24 +585,23 @@ export class MeditationRepository {
     await this.ensurePrisma();
 
     try {
-      console.log('Method called with:', { userId, limit, page, sort, order });
+      console.log("Method called with:", { userId, limit, page, sort, order });
 
-      const userIdBigInt = BigInt(userId);
       const skip = (Number(page || 1) - 1) * Number(limit || 10);
 
       // Fetch the user's selected tag IDs
-      console.log('Fetching user tags...');
+      console.log("Fetching user tags...");
       const userTags = await this.prisma.userTag.findMany({
-        where: { userId: userIdBigInt },
-        select: { tagId: true }
+        where: { userId: userId },
+        select: { tagId: true },
       });
-      console.log('User tags found:', userTags.length);
+      console.log("User tags found:", userTags.length);
 
-      const tagIds = userTags.map(ut => ut.tagId);
-      console.log('Tag IDs:', tagIds);
+      const tagIds = userTags.map((ut) => ut.tagId);
+      console.log("Tag IDs:", tagIds);
 
       if (tagIds.length === 0) {
-        console.log('No tags found for user');
+        console.log("No tags found for user");
         return {
           data: [],
           pagination: {
@@ -612,29 +613,30 @@ export class MeditationRepository {
         };
       }
 
-      console.log('Executing parallel queries...');
+      console.log("Executing parallel queries...");
       const [data, total] = await Promise.all([
         this.prisma.meditation.findMany({
           where: {
             isDeleted: false,
             meditationTags: {
-              some: { tagId: { in: tagIds } }
-            }
+              some: { tagId: { in: tagIds } },
+            },
           },
           include: {
             category: true,
             subcategory: true,
             likedUsers: {
               where: {
-                userId: userIdBigInt
+                userId: userId,
               },
               select: {
-                id: true
-              }
-            }
+                id: true,
+              },
+            },
           },
           orderBy: {
-            [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+            [sort || "createdAt"]:
+              order?.toLowerCase() === "asc" ? "asc" : "desc",
           },
           take: Number(limit || 10),
           skip: Number(skip || 0),
@@ -643,19 +645,19 @@ export class MeditationRepository {
           where: {
             isDeleted: false,
             meditationTags: {
-              some: { tagId: { in: tagIds } }
-            }
+              some: { tagId: { in: tagIds } },
+            },
           },
         }),
       ]);
 
-      console.log('Data found:', data.length);
-      console.log('Total count:', total);
+      console.log("Data found:", data.length);
+      console.log("Total count:", total);
 
       // Transform the data to include isLiked field
-      const transformedData = data.map(meditation => ({
+      const transformedData = data.map((meditation) => ({
         ...meditation,
-        isLiked: meditation.likedUsers.length > 0
+        isLiked: meditation.likedUsers.length > 0,
       }));
 
       return {
@@ -668,15 +670,15 @@ export class MeditationRepository {
         },
       };
     } catch (error) {
-      console.error('Error in findByUserSelectedTags:', error);
-      console.error('Error details:', {
+      console.error("Error in findByUserSelectedTags:", error);
+      console.error("Error details:", {
         message: error.message,
         stack: error.stack,
-        name: error.name
+        name: error.name,
       });
 
       // Return empty response instead of throwing in production
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env.NODE_ENV === "production") {
         return {
           data: [],
           pagination: {
