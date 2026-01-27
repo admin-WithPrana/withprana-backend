@@ -132,7 +132,7 @@ export class SubcategoryUsecase {
 
     async restoreSubcategory(id) {
         try {
-            if (!id || isNaN(id)) {
+            if (!id) {
                 throw new Error('Valid subcategory ID is required');
             }
 
