@@ -392,13 +392,22 @@ export class UserUseCases {
   }
 
   async generateToken(user, device, ip) {
-    const loginHistory = await this.loginHistoryRepository.create({
+    console.log("DEBUG: generateToken called");
+    console.log("DEBUG: user.id:", user.id, "Type:", typeof user.id);
+    console.log("DEBUG: device:", device, "Type:", typeof device);
+    console.log("DEBUG: ip:", ip, "Type:", typeof ip);
+
+    const loginData = {
       userId: user.id,
       role: "USER",
       ipAddress: ip || "",
-      device: device || null,
+      device:
+        typeof device === "string" ? device : JSON.stringify(device) || null,
       isActive: true,
-    });
+    };
+    console.log("DEBUG: loginData prepared:", loginData);
+
+    const loginHistory = await this.loginHistoryRepository.create(loginData);
 
     const token = jwt.sign(
       {
