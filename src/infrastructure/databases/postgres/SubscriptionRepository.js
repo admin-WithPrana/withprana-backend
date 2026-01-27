@@ -34,7 +34,7 @@ export class SubscriptionRepository {
   async createSubscription(data) {
     const subscription = await this.prisma.subscription.create({
       data: {
-        userId: BigInt(data.userId),
+        userId: data.userId,
         planId: data.planId,
         stripeSubscriptionId: data.stripeSubscriptionId || null,
         stripeCustomerId: data.stripeCustomerId || null,
@@ -94,7 +94,7 @@ export class SubscriptionRepository {
     // But good to check if it does in future.
     return await this.prisma.subscription.findFirst({
       where: {
-        userId: BigInt(userId),
+        userId: userId,
         status: "ACTIVE",
         currentPeriodEnd: {
           gt: new Date(),
@@ -112,7 +112,7 @@ export class SubscriptionRepository {
 
     const result = await this.prisma.transaction.create({
       data: {
-        userId: BigInt(data.userId),
+        userId: data.userId,
         subscriptionId: data.subscriptionId || null,
         planId: data.planId || null,
         amount: data.amount,
@@ -171,7 +171,7 @@ export class SubscriptionRepository {
     if (!transaction) {
       console.warn(
         "Transaction not found for checkout session:",
-        checkoutSessionId
+        checkoutSessionId,
       );
 
       // Alternative: Try to find by payment intent if available in data
@@ -192,7 +192,7 @@ export class SubscriptionRepository {
       }
 
       throw new Error(
-        "Transaction not found for checkout session: " + checkoutSessionId
+        "Transaction not found for checkout session: " + checkoutSessionId,
       );
     }
 
@@ -231,7 +231,7 @@ export class SubscriptionRepository {
     const skip = (page - 1) * limit;
 
     const where = {
-      userId: BigInt(userId),
+      userId: userId,
       ...(status && { status }),
       ...(type && { type }),
     };
@@ -268,7 +268,7 @@ export class SubscriptionRepository {
 
   async getUserWithSubscription(userId) {
     const user = await this.prisma.user.findUnique({
-      where: { id: BigInt(userId) },
+      where: { id: userId },
       include: {
         subscriptions: {
           where: {
@@ -340,7 +340,7 @@ export class SubscriptionRepository {
 
     const where = {
       ...(status && { status }),
-      ...(userId && { userId: BigInt(userId) }),
+      ...(userId && { userId: userId }),
       ...(planId && { planId }),
     };
 
@@ -438,7 +438,7 @@ export class SubscriptionRepository {
     const where = {
       ...(status && { status }),
       ...(type && { type }),
-      ...(userId && { userId: BigInt(userId) }),
+      ...(userId && { userId: userId }),
       ...(subscriptionId && { subscriptionId }),
     };
 
@@ -479,7 +479,7 @@ export class SubscriptionRepository {
 
   async updateUserStripeCustomerId(userId, stripeCustomerId) {
     return await this.prisma.user.update({
-      where: { id: BigInt(userId) },
+      where: { id: userId },
       data: { stripeCustomerId },
     });
   }
@@ -494,7 +494,7 @@ export class SubscriptionRepository {
   async getSubscriptionByUserId(userId) {
     return await this.prisma.subscription.findFirst({
       where: {
-        userId: BigInt(userId),
+        userId: userId,
       },
       include: {
         plan: true,
@@ -507,7 +507,7 @@ export class SubscriptionRepository {
     try {
       const activeSubscription = await this.prisma.subscription.findFirst({
         where: {
-          userId: BigInt(userId),
+          userId: userId,
           status: "ACTIVE",
           currentPeriodEnd: {
             gt: new Date(), // not expired
