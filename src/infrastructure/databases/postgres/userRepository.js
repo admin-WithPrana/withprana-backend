@@ -268,7 +268,7 @@ export class PrismaUserRepository {
           warningSent: false, // Reset warning flag on login
         },
         create: {
-          userId: id,
+          userId: userId,
           lastLogin: new Date(),
           warningSent: false,
         },
