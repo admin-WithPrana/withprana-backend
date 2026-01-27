@@ -56,7 +56,12 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
         method: method && typeof method === "object" ? method.value : method,
         image: profilePictureUrl,
-        device: request.body.device,
+        device:
+          request.body.device &&
+          typeof request.body.device === "object" &&
+          request.body.device.value
+            ? request.body.device.value
+            : request.body.device,
       };
 
       await userController.register({ ...request, body: payload }, reply);
