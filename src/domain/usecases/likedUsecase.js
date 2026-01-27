@@ -7,7 +7,7 @@ export class LikedUsecase {
   // Like a meditation
   async likeMeditation(userId, meditationId) {
     try {
-      if (!userId)) {
+      if (!userId) {
         throw new Error('Valid user ID is required');
       }
 
