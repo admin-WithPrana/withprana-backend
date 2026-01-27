@@ -55,6 +55,7 @@ export class UserUseCases {
   }
 
   async registerUser(userData, device, ip) {
+    console.log("DEBUG: registerUser started for email:", userData.email);
     const user = new User({
       email: userData.email.toLowerCase(),
       name: userData.name,
@@ -66,7 +67,6 @@ export class UserUseCases {
 
     user.validate();
 
-    // Check using deterministic encrypted email
     const encryptedEmail = encryptDeterministic(user.email);
     let existingUser = await this.userRepository.findByEmail(encryptedEmail);
     if (existingUser) existingUser = this._decryptUser(existingUser);
@@ -100,13 +100,11 @@ export class UserUseCases {
           }
         }
 
-        // Encrypt name before updating
         const updateData = {
           name: userData.name ? userData.name : undefined,
           image: userData.image,
           signupMethod: this.signupSelector(Number(userData.method)),
         };
-        // Remove undefined keys
         Object.keys(updateData).forEach(
           (key) => updateData[key] === undefined && delete updateData[key],
         );
@@ -116,7 +114,12 @@ export class UserUseCases {
           updateData,
         );
         updatedUser = this._decryptUser(updatedUser);
+        console.log(
+          "DEBUG: About to call updateLastLogin with id:",
+          updatedUser.id,
+        );
         await this.userRepository.updateLastLogin(updatedUser.id);
+        console.log("DEBUG: updateLastLogin completed");
 
         const { token, loginHistory } = await this.generateToken(
           updatedUser,
@@ -182,6 +185,10 @@ export class UserUseCases {
     });
 
     if (existingUser) {
+      if (existingUser.active === true) {
+        throw new Error("This email is already registered. Please login");
+      }
+
       if (existingUser.active === false) {
         if (existingUser.systemDeactivated) {
           await this.userRepository.reactivateUser(existingUser.id);
