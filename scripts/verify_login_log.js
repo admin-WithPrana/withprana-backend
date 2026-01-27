@@ -24,7 +24,7 @@ const verify = async () => {
     }
 
     console.log(`Testing with User ID: ${user.id}`);
-    const userId = Number(user.id);
+    const userId = user.id;
 
     // 2. Update Last Login (simulating logic in UserUseCases)
     const userRepo = new PrismaUserRepository(prisma);
