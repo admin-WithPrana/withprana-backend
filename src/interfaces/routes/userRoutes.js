@@ -4,6 +4,7 @@ import { PrismaUserRepository } from "../../infrastructure/databases/postgres/us
 import fastifyMultipart from "@fastify/multipart";
 import { LoginHistoryRepository } from "../../infrastructure/databases/postgres/loginHistoryRepository.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
@@ -45,7 +46,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
       }
 
       if (profilePicture?.file) {
-        let image = uploadToS3(profilePicture, "images");
+        let image = await uploadToS3(profilePicture, "images");
         profilePictureUrl = image[0];
       }
 
@@ -55,7 +56,12 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
         method: method && typeof method === "object" ? method.value : method,
         image: profilePictureUrl,
-        device: request.body.device,
+        device:
+          request.body.device &&
+          typeof request.body.device === "object" &&
+          request.body.device.value
+            ? request.body.device.value
+            : request.body.device,
       };
 
       await userController.register({ ...request, body: payload }, reply);
@@ -99,7 +105,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
 
         if (profilePicture) {
           if (profilePicture?.file) {
-            let image = uploadToS3(profilePicture, "images");
+            let image = await uploadToS3(profilePicture, "images");
             profilePictureUrl = image[0];
           } else if (
             typeof profilePicture === "string" &&

@@ -1,8 +1,12 @@
 export class MeditationUsecase {
-  constructor(meditationRepository, meditationWatchHistoryRepository, meditationQueue) {
+  constructor(
+    meditationRepository,
+    meditationWatchHistoryRepository,
+    meditationQueue,
+  ) {
     this.meditationRepository = meditationRepository;
-    this.meditationWatchHistoryRepository = meditationWatchHistoryRepository
-    this.meditationQueue = meditationQueue
+    this.meditationWatchHistoryRepository = meditationWatchHistoryRepository;
+    this.meditationQueue = meditationQueue;
   }
 
   async createMeditation({
@@ -17,7 +21,7 @@ export class MeditationUsecase {
     subcategoryId = null,
     type,
     tags,
-    scheduledAt
+    scheduledAt,
   }) {
     const meditation = await this.meditationRepository.create({
       title,
@@ -31,27 +35,27 @@ export class MeditationUsecase {
       subcategoryId,
       type: type,
       tags: tags,
-      scheduledAt
+      scheduledAt,
     });
 
     if (meditation.scheduledAt) {
       await this.meditationQueue.add(
-        'meditationQueue',
+        "meditationQueue",
         { meditationId: meditation.id },
         {
           delay: new Date(meditation.scheduledAt).getTime() - Date.now(),
           attempts: 3, // retry if job fails
           removeOnComplete: true,
-          removeOnFail: false
-        }
+          removeOnFail: false,
+        },
       );
     }
 
-    return meditation
+    return meditation;
   }
 
   async getMeditationById(id, user) {
-    const meditation = await this.meditationRepository.findById(id);
+    const meditation = await this.meditationRepository.findById(id, user?.id);
     if (!meditation) throw new Error("Meditation not found");
     if (user.role == "USER") {
       const watchHistory = await this.meditationWatchHistoryRepository.create({
@@ -60,25 +64,30 @@ export class MeditationUsecase {
         watchedSeconds: 0,
         completed: false,
         device: user.device || null,
-        watchedAt: new Date()
+        watchedAt: new Date(),
       });
 
       return {
         meditation,
-        watchHistory
-      }
+        watchHistory,
+      };
     }
     return meditation;
   }
 
-  async getMeditationBySubCategoryId(id) {
-    const meditation = await this.meditationRepository.getMeditationBySubCategoryId(id);
+  async getMeditationBySubCategoryId(id, user) {
+    const meditation =
+      await this.meditationRepository.getMeditationBySubCategoryId(
+        id,
+        user?.id,
+      );
     if (!meditation) throw new Error("Meditation not found");
     return meditation;
   }
 
   async getMeditationByCategoryId(id) {
-    const meditation = await this.meditationRepository.getMeditationByCategoryId(id);
+    const meditation =
+      await this.meditationRepository.getMeditationByCategoryId(id);
     if (!meditation) throw new Error("Meditation not found");
     return meditation;
   }
@@ -89,9 +98,15 @@ export class MeditationUsecase {
 
   async getMeditationsByUserSelectedTags(userId, limit, page, sort, order) {
     if (!userId) {
-      throw new Error('User authentication required');
+      throw new Error("User authentication required");
     }
-    return this.meditationRepository.findByUserSelectedTags(userId, limit, page, sort, order);
+    return this.meditationRepository.findByUserSelectedTags(
+      userId,
+      limit,
+      page,
+      sort,
+      order,
+    );
   }
 
   async updateMeditation(id, data) {
@@ -109,7 +124,10 @@ export class MeditationUsecase {
   }
 
   async getMeditationsByDuration(minDuration, maxDuration) {
-    return this.meditationRepository.findByDurationRange(minDuration, maxDuration);
+    return this.meditationRepository.findByDurationRange(
+      minDuration,
+      maxDuration,
+    );
   }
 
   async searchMeditations(query) {
@@ -119,12 +137,12 @@ export class MeditationUsecase {
   async incrementPlayCount(id) {
     const meditation = await this.getMeditationById(id);
     return this.meditationRepository.update(id, {
-      playCount: (meditation.playCount || 0) + 1
+      playCount: (meditation.playCount || 0) + 1,
     });
   }
 
   async updateMeditationTime(id, data) {
-    return this.meditationWatchHistoryRepository.update(id, data)
+    return this.meditationWatchHistoryRepository.update(id, data);
   }
   async getPopularMeditations(limit = 10) {
     return this.meditationRepository.findMostPopular(limit);

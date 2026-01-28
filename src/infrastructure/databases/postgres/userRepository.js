@@ -261,6 +261,13 @@ export class PrismaUserRepository {
 
   async updateLastLogin(userId) {
     try {
+      console.log(
+        `DEBUG: updateLastLogin called with userId type: ${typeof userId}, value: ${userId}`,
+      );
+      if (!userId) {
+        console.error("DEBUG: userId is falsy!");
+        return;
+      }
       await this.prisma.userLoginLog.upsert({
         where: { userId: userId },
         update: {
@@ -268,12 +275,12 @@ export class PrismaUserRepository {
           warningSent: false, // Reset warning flag on login
         },
         create: {
-          userId: id,
+          userId: userId,
           lastLogin: new Date(),
           warningSent: false,
         },
       });
-      // console.log(`✅ Updated last login for user ${userId}`);
+      console.log(`✅ Updated last login for user ${userId}`);
     } catch (error) {
       console.error("❌ Error updating last login:", error);
       // Non-blocking error
