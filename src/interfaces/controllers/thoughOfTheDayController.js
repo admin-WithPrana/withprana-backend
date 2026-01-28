@@ -57,9 +57,9 @@ export class ThoughtOfTheDayController {
   // GET /thoughts
   async getThoughts(request, reply) {
     try {
-      const { status, limit=10, page,sort,order } = request.query;
+      const { status, limit = 10, page, sort, order } = request.query;
 
-      const thoughts = await this.thoughtUsecase.getThoughts({ status, limit, skip: limit && page ? (Number(page) - 1) * Number(limit) : null,sort,order });
+      const thoughts = await this.thoughtUsecase.getThoughts({ status, limit, skip: limit && page ? (Number(page) - 1) * Number(limit) : null, sort, order });
 
       return reply.send({
         success: true,
@@ -101,6 +101,24 @@ export class ThoughtOfTheDayController {
         message: 'Failed to update post status',
         error: error.message || error,
       });
+    }
+  }
+
+  async getTodayThought(request, reply) {
+    try {
+      const thought = await this.thoughtUsecase.getTodayThought()
+
+      return reply.send({
+        success: true,
+        thought,
+      })
+    } catch (error) {
+      console.error('Error in getTodayThought:', error)
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to get today thought',
+        error: error.message || error,
+      })
     }
   }
 }

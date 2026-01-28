@@ -24,37 +24,51 @@ export class ThoughtOfTheDayRepository {
   }
 
   // Fetch all thoughts by filters (e.g., status)
-async findAll({ status = null, limit = null, skip = null,sort='createdAt',order }) {
+  async findAll({ status = null, limit = null, skip = null, sort = 'createdAt', order }) {
 
-  const where = {
-    ...(status && { status }),
-  };
+    const where = {
+      ...(status && { status }),
+    };
 
-  const [data, total] = await Promise.all([
-    this.prisma.thoughtOfTheDay.findMany({
-      where,
+    const [data, total] = await Promise.all([
+      this.prisma.thoughtOfTheDay.findMany({
+        where,
+        orderBy: {
+          [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+        },
+
+        ...(limit && { take: Number(limit) }),
+        ...(skip && { skip: Number(skip) }),
+      }),
+      this.prisma.thoughtOfTheDay.count({ where }),
+    ]);
+
+    const page = limit ? Math.floor((Number(skip) || 0) / Number(limit)) + 1 : 1;
+
+    return {
+      data,
+      pagination: {
+        total,
+        page,
+        limit: limit ? Number(limit) : total,
+        totalPages: limit ? Math.ceil(total / Number(limit)) : 1,
+      },
+    };
+  }
+
+  async findReleasedUntilNow() {
+    return this.prisma.thoughtOfTheDay.findMany({
+      where: {
+        scheduledAt: {
+          lte: new Date(),
+        },
+        status: "POSTED",
+      },
       orderBy: {
-            [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
-          },
-      
-      ...(limit && { take: Number(limit) }),
-      ...(skip && { skip: Number(skip) }),
-    }),
-    this.prisma.thoughtOfTheDay.count({ where }),
-  ]);
-
-  const page = limit ? Math.floor((Number(skip) || 0) / Number(limit)) + 1 : 1;
-
-  return {
-    data,
-    pagination: {
-      total,
-      page,
-      limit: limit ? Number(limit) : total,
-      totalPages: limit ? Math.ceil(total / Number(limit)) : 1,
-    },
-  };
-}
+        scheduledAt: "desc",
+      },
+    })
+  }
 
 
 }
