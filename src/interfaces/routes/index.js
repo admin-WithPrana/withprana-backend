@@ -16,42 +16,57 @@ import { registerProtectedRoute } from "../../infrastructure/services/registerPr
 import { dashboardRoutes } from "./dashboardRoutes.js";
 import { settingsRoutes } from "./settingsRoute.js";
 import { sarLogRoutes } from "./ssrLogRoute.js";
+import { otpRoutes } from "./otpRoutes.js";
 
 export async function registerRoutes(app, deps) {
   // ------------------------ PUBLIC ROUTES ------------------------
-  app.register(async function (authScope) {
-    authRoutes(authScope, {
-      prismaRepository: deps.prismaRepository,
-      mailer: deps.mailer,
-    });
-  }, { prefix: "/api/auth" });
+  app.register(
+    async function (authScope) {
+      authRoutes(authScope, {
+        prismaRepository: deps.prismaRepository,
+        mailer: deps.mailer,
+      });
+    },
+    { prefix: "/api/auth" },
+  );
 
-  app.register(async function (subscriptionScope) {
-    setupSubscriptionRoutes(subscriptionScope, {
-      prismaRepository: deps.prismaRepository,
-      userRepository: deps.userRepository || {
-        findById: (id) =>
-          deps.prismaRepository.prisma.user.findUnique({ where: { id: BigInt(id) } }),
-        updateUserStripeCustomerId: (userId, stripeCustomerId) =>
-          deps.prismaRepository.prisma.user.update({ where: { id: BigInt(userId) }, data: { stripeCustomerId } }),
-        updateUserSubscriptionType: (userId, subscriptionType) => {
-          const id = typeof userId === 'bigint' ? Number(userId) : Number(userId);
-          return deps.prismaRepository.prisma.user.update({
-            where: { id },
-            data: { subscriptionType: subscriptionType.toUpperCase() }
-          });
-        }
-      }
-    });
-  }, { prefix: "/api/subscriptions" });
+  app.register(
+    async function (subscriptionScope) {
+      setupSubscriptionRoutes(subscriptionScope, {
+        prismaRepository: deps.prismaRepository,
+        userRepository: deps.userRepository || {
+          findById: (id) =>
+            deps.prismaRepository.prisma.user.findUnique({
+              where: { id: BigInt(id) },
+            }),
+          updateUserStripeCustomerId: (userId, stripeCustomerId) =>
+            deps.prismaRepository.prisma.user.update({
+              where: { id: BigInt(userId) },
+              data: { stripeCustomerId },
+            }),
+          updateUserSubscriptionType: (userId, subscriptionType) => {
+            const id =
+              typeof userId === "bigint" ? Number(userId) : Number(userId);
+            return deps.prismaRepository.prisma.user.update({
+              where: { id },
+              data: { subscriptionType: subscriptionType.toUpperCase() },
+            });
+          },
+        },
+      });
+    },
+    { prefix: "/api/subscriptions" },
+  );
 
-
-  app.register(async function (setupScope) {
-    setupRoutes(setupScope, {
-      prismaRepository: deps.prismaRepository,
-      mailer: deps.mailer,
-    });
-  }, { prefix: "/api/user" });
+  app.register(
+    async function (setupScope) {
+      setupRoutes(setupScope, {
+        prismaRepository: deps.prismaRepository,
+        mailer: deps.mailer,
+      });
+    },
+    { prefix: "/api/user" },
+  );
 
   // ------------------------ PROTECTED ROUTES ------------------------
 
@@ -105,7 +120,6 @@ export async function registerRoutes(app, deps) {
     prismaRepository: deps.prismaRepository,
   });
 
-
   registerProtectedRoute(app, "/api/settings", settingsRoutes, {
     prismaRepository: deps.prismaRepository,
   });
@@ -117,5 +131,9 @@ export async function registerRoutes(app, deps) {
   registerProtectedRoute(app, "/api/sar-log", sarLogRoutes, {
     prismaRepository: deps.prismaRepository,
   });
-}
 
+  registerProtectedRoute(app, "/api/otp", otpRoutes, {
+    prismaRepository: deps.prismaRepository,
+    mailer: deps.mailer,
+  });
+}

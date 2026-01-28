@@ -21,15 +21,12 @@ export class PrismaUserRepository {
 
     try {
       if (decrypted.encryptedUserKey) {
-        // New Flow: Decrypt userKey then decrypt data
         const userKey = decryptUserKey(decrypted.encryptedUserKey);
         if (decrypted.name) decrypted.name = decrypt(decrypted.name, userKey);
       } else {
-        // Old Flow: Fallback to MASTER_KEY
         if (decrypted.name) decrypted.name = decrypt(decrypted.name);
       }
     } catch (error) {
-      // If decryption fails, keep original or handle error
       console.error("Decryption failed for user:", user.id, error);
     }
 
@@ -52,7 +49,6 @@ export class PrismaUserRepository {
 
   async createUser(user) {
     try {
-      // Generate per-user key
       const userKey = generateUserKey();
       const encryptedUserKey = encryptUserKey(userKey);
 
@@ -62,11 +58,11 @@ export class PrismaUserRepository {
           signupMethod: user.signupMethod,
           subscriptionType: user.subscriptionType,
           email: user.email.toLowerCase(),
-          name: user.name ? encrypt(user.name, userKey) : null, // Encrypt with userKey
+          name: user.name ? encrypt(user.name, userKey) : null,
           password: user.password,
           isVerified: user?.isVerified ?? false,
           active: user?.active ?? false,
-          encryptedUserKey: encryptedUserKey, // Store the encrypted key
+          encryptedUserKey: encryptedUserKey,
         },
       });
 
@@ -152,7 +148,7 @@ export class PrismaUserRepository {
   async update(id, data) {
     try {
       const updateData = { ...data };
-      // Handle encryption if name is being updated
+
       if (updateData.name) {
         const user = await this.prisma.user.findUnique({
           where: { id: id },
@@ -162,7 +158,7 @@ export class PrismaUserRepository {
             const userKey = decryptUserKey(user.encryptedUserKey);
             updateData.name = encrypt(updateData.name, userKey);
           } else {
-            updateData.name = encrypt(updateData.name); // Fallback to Master Key
+            updateData.name = encrypt(updateData.name);
           }
         }
       }
