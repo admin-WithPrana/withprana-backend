@@ -17,6 +17,7 @@ import { dashboardRoutes } from "./dashboardRoutes.js";
 import { settingsRoutes } from "./settingsRoute.js";
 import { sarLogRoutes } from "./ssrLogRoute.js";
 import { otpRoutes } from "./otpRoutes.js";
+import { supportRoutes } from "./supportRoutes.js";
 
 export async function registerRoutes(app, deps) {
   // ------------------------ PUBLIC ROUTES ------------------------
@@ -135,5 +136,9 @@ export async function registerRoutes(app, deps) {
   registerProtectedRoute(app, "/api/otp", otpRoutes, {
     prismaRepository: deps.prismaRepository,
     mailer: deps.mailer,
+  });
+
+  registerProtectedRoute(app, "/api/support", supportRoutes, {
+    prismaRepository: deps.prismaRepository,
   });
 }
