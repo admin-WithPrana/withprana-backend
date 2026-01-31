@@ -221,47 +221,57 @@ export class SubscriptionUseCases {
       console.log("✅ Subscription created:", subscription.id);
 
       // Create pending transaction/subscription in DB
-      const now = new Date();
-      const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
-      const initialStatus = trialDays > 0 ? "TRIALING" : "ACTIVE";
+      if (trialDays > 0) {
+        const now = new Date();
+        const currentPeriodEnd = new Date(
+          subscription.current_period_end * 1000,
+        );
+        const initialStatus = "TRIALING";
 
-      await this.subscriptionRepo.deleteSubscription({
-        userId: userId,
-        status: initialStatus,
-      });
+        await this.subscriptionRepo.deleteSubscription({
+          userId: userId,
+          status: initialStatus,
+        });
 
-      await this.subscriptionRepo.createSubscription({
-        userId: userId,
-        planId: plan.id,
-        stripeSubscriptionId: subscription.id,
-        stripeCustomerId: customer.id,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: currentPeriodEnd,
-        status: initialStatus,
-        cancelAtPeriodEnd: false,
-      });
+        await this.subscriptionRepo.createSubscription({
+          userId: userId,
+          planId: plan.id,
+          stripeSubscriptionId: subscription.id,
+          stripeCustomerId: customer.id,
+          currentPeriodStart: new Date(
+            subscription.current_period_start * 1000,
+          ),
+          currentPeriodEnd: currentPeriodEnd,
+          status: initialStatus,
+          cancelAtPeriodEnd: false,
+        });
 
-      // Update user subscription type to "premium"
-      await this.userRepo.updateUserSubscriptionType(userId, "premium");
+        // Update user subscription type to "premium" (Trials are premium)
+        await this.userRepo.updateUserSubscriptionType(userId, "premium");
 
-      // We also create a transaction record for tracking
-      await this.subscriptionRepo.createTransaction({
-        userId,
-        planId: plan.id,
-        amount: plan.price,
-        currency: plan.currency,
-        status: "PENDING",
-        type: "SUBSCRIPTION",
-        stripePaymentIntentId:
-          subscription.latest_invoice?.payment_intent?.id || null,
-        metadata: {
-          subscriptionId: subscription.id,
-          planName: plan.name,
-          description: description,
-          isTrial: trialDays > 0,
-          trialDays: trialDays,
-        },
-      });
+        // We also create a transaction record for tracking
+        await this.subscriptionRepo.createTransaction({
+          userId,
+          planId: plan.id,
+          amount: plan.price,
+          currency: plan.currency,
+          status: "PENDING",
+          type: "SUBSCRIPTION",
+          stripePaymentIntentId:
+            subscription.latest_invoice?.payment_intent?.id || null,
+          metadata: {
+            subscriptionId: subscription.id,
+            planName: plan.name,
+            description: description,
+            isTrial: true,
+            trialDays: trialDays,
+          },
+        });
+      } else {
+        console.log(
+          "No trial period. Subscription DB record will be created via webhook after successful payment.",
+        );
+      }
 
       // Return client secret for the frontend to confirm payment/setup
       const clientSecret = subscription.pending_setup_intent
@@ -448,7 +458,81 @@ export class SubscriptionUseCases {
           });
         }
       } else {
-        console.warn("Subscription not found for invoice:", invoice.id);
+        // Fallback or New Subscription for No-Trial plans:
+        // If no existing subscription is found in DB, it might be a new subscription that had 0 trial days,
+        // so we relied on this webhook to create it.
+
+        console.log(
+          "Subscription not found in DB. Checking if it needs to be created (No-Trial Flow)...",
+        );
+
+        // Metadata should have been attached during subscription creation
+        const metadata = stripeSubscription.metadata;
+
+        if (metadata && metadata.userId && metadata.planId) {
+          const userId = metadata.userId;
+          const planId = metadata.planId;
+
+          console.log(
+            `Creating new ACTIVE subscription for user ${userId} via webhook.`,
+            metadata,
+          );
+
+          // Double check if plan exists in our DB to get price/currency details if needed for transaction
+          // Although we can get amount/currency from invoice.
+
+          await this.subscriptionRepo.createSubscription({
+            userId: userId,
+            planId: planId,
+            stripeSubscriptionId: invoice.subscription,
+            stripeCustomerId: invoice.customer,
+            currentPeriodStart: currentPeriodStart,
+            currentPeriodEnd: currentPeriodEnd,
+            status: "ACTIVE", // Payments succeeded, so it is active
+            cancelAtPeriodEnd: false,
+          });
+
+          // Update user to premium
+          await this.userRepo.updateUserSubscriptionType(userId, "premium");
+
+          // Fetch the newly created subscription to get its DB ID
+          const newSub = await this.subscriptionRepo.findSubscriptionByStripeId(
+            invoice.subscription,
+          );
+
+          if (newSub) {
+            // Create the transaction
+            await this.subscriptionRepo.createTransaction({
+              userId: userId,
+              planId: planId,
+              subscriptionId: newSub.id,
+              amount: invoice.amount_paid / 100,
+              currency: invoice.currency,
+              status: "SUCCEEDED",
+              type: "SUBSCRIPTION", // Initial payment
+              stripePaymentIntentId: invoice.payment_intent,
+              stripeInvoiceId: invoice.id,
+              description: `Subscription payment: ${invoice.number}`,
+              metadata: {
+                invoiceUrl: invoice.hosted_invoice_url,
+                periodStart: currentPeriodStart,
+                periodEnd: currentPeriodEnd,
+              },
+            });
+            console.log(
+              `Created new subscription ${newSub.id} and transaction for user ${userId}`,
+            );
+          } else {
+            console.error(
+              "Failed to retrieve newly created subscription for transaction creation.",
+            );
+          }
+        } else {
+          console.warn(
+            "Subscription not found and no metadata to create it:",
+            invoice.id,
+          );
+        }
       }
     } catch (error) {
       console.error("Error handling invoice payment:", error);
