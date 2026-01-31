@@ -59,6 +59,7 @@ model User {
   subscriptionType String         @default("free")
   stripeCustomerId String?
   likedMeditations Liked[]
+  likedSubcategories LikedSubcategory[]
   playlists        Playlist[]
   subscriptions    Subscription[]
   transactions     Transaction[]
@@ -175,6 +176,7 @@ model Subcategory {
   categoryId  String
   color       String?
   meditations Meditation[]
+  likedUsers  LikedSubcategory[]
   category    Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([name, categoryId])
@@ -191,6 +193,18 @@ model Liked {
 
   @@unique([userId, meditationId])
   @@map("liked_meditations")
+}
+
+model LikedSubcategory {
+  id            String      @id @default(uuid())
+  userId        String
+  subcategoryId String
+  createdAt     DateTime    @default(now())
+  subcategory   Subcategory @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subcategoryId])
+  @@map("liked_subcategories")
 }
 
 model Playlist {
