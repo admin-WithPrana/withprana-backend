@@ -7,7 +7,7 @@ export class SupportController {
 
   async sendSupportRequest(req, reply) {
     try {
-      const { subject, message, image } = req.body;
+      const { subject, message, image, attachment, file } = req.body;
       const user = req.user;
 
       if (!user) {
@@ -25,10 +25,14 @@ export class SupportController {
 
       const userEmail = decryptDeterministic(user.email);
 
+      // Support generic attachment field name (image, attachment, or file)
+      const uploadedFile = image || attachment || file;
+
       const requestData = {
         subject: subjectValue,
         message: messageValue,
-        image: image && image.file ? image : undefined,
+        attachment:
+          uploadedFile && uploadedFile.file ? uploadedFile : undefined,
         userEmail: userEmail,
       };
 

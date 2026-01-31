@@ -7,14 +7,14 @@ export class SupportUseCase {
   }
 
   async createSupportDevice(data) {
-    const { subject, message, image, userEmail } = data;
+    const { subject, message, attachment, userEmail } = data;
 
     // Save to DB (optional/mock)
     await this.supportRepository.createSupportTicket({
       subject,
       message,
       userEmail,
-      hasAttachment: !!image,
+      hasAttachment: !!attachment,
     });
 
     // Prepare Email
@@ -30,14 +30,14 @@ export class SupportUseCase {
     `;
 
     const attachments = [];
-    if (image) {
-      // Assuming image is the object from fastify-multipart
+    if (attachment) {
+      // Assuming attachment is the object from fastify-multipart
       // fastify-multipart adds a .toBuffer() method to the file object
-      const buffer = await image.toBuffer();
+      const buffer = await attachment.toBuffer();
       attachments.push({
-        filename: image.filename,
+        filename: attachment.filename,
         content: buffer,
-        contentType: image.mimetype,
+        contentType: attachment.mimetype,
       });
     }
 
