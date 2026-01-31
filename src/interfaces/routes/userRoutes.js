@@ -6,6 +6,8 @@ import { LoginHistoryRepository } from "../../infrastructure/databases/postgres/
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 
+import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
+
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
     throw new Error("Prisma client is not properly initialized");
@@ -16,12 +18,14 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   const loginHistoryRepository = new LoginHistoryRepository(
     prismaRepository.prisma,
   );
+  const subscriptionRepo = new SubscriptionRepository(prismaRepository.prisma);
 
   const userController = new UserController(
     userRepo,
     otpRepo,
     mailer,
     loginHistoryRepository,
+    subscriptionRepo,
   );
 
   app.register(fastifyMultipart, {

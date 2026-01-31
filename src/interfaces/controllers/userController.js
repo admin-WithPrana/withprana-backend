@@ -2,14 +2,30 @@ import { UserUseCases } from "../../domain/usecases/userUseCases.js";
 import { CreateUserDTO, VerifyUserDTO } from "../dtos/userDTO.js";
 
 export class UserController {
-  constructor(userRepository, otpRepository, mailer, loginHistoryRepository) {
-    this.userUseCases = new UserUseCases(userRepository, otpRepository, mailer, loginHistoryRepository);
+  constructor(
+    userRepository,
+    otpRepository,
+    mailer,
+    loginHistoryRepository,
+    subscriptionRepository,
+  ) {
+    this.userUseCases = new UserUseCases(
+      userRepository,
+      otpRepository,
+      mailer,
+      loginHistoryRepository,
+      subscriptionRepository,
+    );
   }
 
   async register(request, reply) {
     try {
       const { device, ...userDTO } = new CreateUserDTO(request.body);
-      const result = await this.userUseCases.registerUser(userDTO, device, request.ip);
+      const result = await this.userUseCases.registerUser(
+        userDTO,
+        device,
+        request.ip,
+      );
 
       if (JSON.parse(result.oauth)) {
         return reply.code(201).send({
@@ -34,7 +50,7 @@ export class UserController {
         });
       }
     } catch (error) {
-      console.log(error)
+      console.log(error);
       return reply.code(400).send({
         success: false,
         message: error.message,
@@ -49,7 +65,7 @@ export class UserController {
         verifyDTO.email,
         verifyDTO.otp,
         verifyDTO.device,
-        request?.ip
+        request?.ip,
       );
 
       return reply.code(200).send({
@@ -60,7 +76,7 @@ export class UserController {
         register: result.register,
       });
     } catch (error) {
-      console.log(error)
+      console.log(error);
       return reply.code(400).send({
         success: false,
         message: error.message,
@@ -98,7 +114,7 @@ export class UserController {
           success: true,
           message: result.message,
           token: result.token,
-          refreshToken: result.refreshToken, 
+          refreshToken: result.refreshToken,
           oauth: result.oauth,
         });
       } else {
@@ -114,7 +130,6 @@ export class UserController {
       });
     }
   }
-
 
   async logout(request, reply) {
     try {
@@ -137,7 +152,7 @@ export class UserController {
       return reply.code(500).send({
         success: false,
         message: error.message || "Internal server error",
-      })
+      });
     }
   }
   async refresh(request, reply) {
@@ -199,7 +214,7 @@ export class UserController {
     try {
       const userDTO = new CreateUserDTO(request.body);
       const { id } = request.params;
-      const requestingUser = request.user || request.body.user; 
+      const requestingUser = request.user || request.body.user;
 
       if (!requestingUser || String(requestingUser.id) !== String(id)) {
         return reply.code(403).send({

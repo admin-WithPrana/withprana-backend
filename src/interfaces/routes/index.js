@@ -38,11 +38,11 @@ export async function registerRoutes(app, deps) {
         userRepository: deps.userRepository || {
           findById: (id) =>
             deps.prismaRepository.prisma.user.findUnique({
-              where: { id: BigInt(id) },
+              where: { id: id },
             }),
           updateUserStripeCustomerId: (userId, stripeCustomerId) =>
             deps.prismaRepository.prisma.user.update({
-              where: { id: BigInt(userId) },
+              where: { id: userId },
               data: { stripeCustomerId },
             }),
           updateUserSubscriptionType: (userId, subscriptionType) => {

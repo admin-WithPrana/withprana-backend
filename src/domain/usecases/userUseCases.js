@@ -10,12 +10,18 @@ import {
 } from "../../utils/encryption.js";
 
 export class UserUseCases {
-  constructor(userRepo, otpRepository, mailer, loginHistoryRepository) {
+  constructor(
+    userRepo,
+    otpRepository,
+    mailer,
+    loginHistoryRepository,
+    subscriptionRepo,
+  ) {
     this.userRepository = userRepo;
-    this.otpRepository = otpRepository;
     this.otpRepository = otpRepository;
     this.mailer = mailer;
     this.loginHistoryRepository = loginHistoryRepository;
+    this.subscriptionRepository = subscriptionRepo;
   }
 
   generateRefreshToken() {
@@ -391,6 +397,29 @@ export class UserUseCases {
       isActive: true,
     });
 
+    let isSubscribed = false;
+    let subscriptionType = "free";
+
+    if (this.subscriptionRepository) {
+      try {
+        const subStatus = await this.subscriptionRepository.isUserSubscribed(
+          user.id,
+        );
+        if (subStatus.isSubscribed) {
+          isSubscribed = true;
+          subscriptionType = "Premium"; // Or fetch from plan name: subStatus.subscription.plan.name
+          if (subStatus.subscription?.plan?.name) {
+            subscriptionType = subStatus.subscription.plan.name;
+          }
+        }
+      } catch (err) {
+        console.error(
+          "Error checking subscription status during token generation:",
+          err,
+        );
+      }
+    }
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -398,6 +427,8 @@ export class UserUseCases {
         name: user.name ? encrypt(user.name) : undefined,
         role: "USER",
         sessionId: loginHistory.id,
+        isSubscribed: isSubscribed,
+        subscriptionType: subscriptionType,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },

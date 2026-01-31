@@ -24,8 +24,13 @@ export class ThoughtOfTheDayRepository {
   }
 
   // Fetch all thoughts by filters (e.g., status)
-  async findAll({ status = null, limit = null, skip = null, sort = 'createdAt', order }) {
-
+  async findAll({
+    status = null,
+    limit = null,
+    skip = null,
+    sort = "createdAt",
+    order,
+  }) {
     const where = {
       ...(status && { status }),
     };
@@ -34,7 +39,8 @@ export class ThoughtOfTheDayRepository {
       this.prisma.thoughtOfTheDay.findMany({
         where,
         orderBy: {
-          [sort || "createdAt"]: order?.toLowerCase() === "asc" ? "asc" : "desc",
+          [sort || "createdAt"]:
+            order?.toLowerCase() === "asc" ? "asc" : "desc",
         },
 
         ...(limit && { take: Number(limit) }),
@@ -43,7 +49,9 @@ export class ThoughtOfTheDayRepository {
       this.prisma.thoughtOfTheDay.count({ where }),
     ]);
 
-    const page = limit ? Math.floor((Number(skip) || 0) / Number(limit)) + 1 : 1;
+    const page = limit
+      ? Math.floor((Number(skip) || 0) / Number(limit)) + 1
+      : 1;
 
     return {
       data,
@@ -67,8 +75,20 @@ export class ThoughtOfTheDayRepository {
       orderBy: {
         scheduledAt: "desc",
       },
-    })
+    });
   }
 
-
+  async findOneReleasedToday() {
+    return this.prisma.thoughtOfTheDay.findFirst({
+      where: {
+        scheduledAt: {
+          lte: new Date(),
+        },
+        status: "POSTED",
+      },
+      orderBy: {
+        scheduledAt: "desc",
+      },
+    });
+  }
 }
