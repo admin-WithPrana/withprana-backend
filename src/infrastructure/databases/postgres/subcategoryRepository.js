@@ -32,27 +32,40 @@ export class SubcategoryRepository {
           active: true,
           isDeleted: false,
         },
+        include: {
+          // Include likedUsers for each meditation if userId is provided
+          ...(userId && {
+            likedUsers: {
+              where: { userId: userId },
+              select: { id: true },
+            },
+          }),
+        },
       },
     };
-
-    if (userId) {
-      include.likedUsers = {
-        where: { userId: userId },
-        select: { id: true },
-      };
-    }
 
     const subcategory = await this.prisma.subcategory.findUnique({
       where: { id },
       include,
     });
 
-    if (subcategory && userId) {
-      subcategory.isLiked = subcategory.likedUsers.length > 0;
-      delete subcategory.likedUsers;
-    } else if (subcategory) {
-      subcategory.isLiked = false;
+    if (subcategory && subcategory.meditations) {
+      // Map meditations to add isLiked field based on likedUsers presence
+      subcategory.meditations = subcategory.meditations.map((meditation) => {
+        const isLiked = userId
+          ? meditation.likedUsers && meditation.likedUsers.length > 0
+          : false;
+        // Remove likedUsers from the response to keep it clean
+        if (meditation.likedUsers) delete meditation.likedUsers;
+
+        return {
+          ...meditation,
+          isLiked,
+        };
+      });
     }
+
+    // Removed subcategory.isLiked logic as requested
 
     return subcategory;
   }
