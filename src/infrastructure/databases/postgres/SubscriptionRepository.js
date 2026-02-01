@@ -106,7 +106,7 @@ export class SubscriptionRepository {
     return await this.prisma.subscription.findFirst({
       where: {
         userId: userId,
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "TRIALING"] },
         currentPeriodEnd: {
           gt: new Date(),
         },
