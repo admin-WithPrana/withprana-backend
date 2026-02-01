@@ -827,23 +827,50 @@ export class SubscriptionUseCases {
       throw new Error("Subscription cannot be cancelled (missing Stripe ID)");
     }
 
-    // Call Stripe to cancel at period end
-    await this.stripeService.cancelSubscription(
-      activeSubscription.stripeSubscriptionId,
-    );
+    if (activeSubscription.status === "TRIALING") {
+      // Scenario 1: Trial User - Cancel IMMEDIATELY
+      await this.stripeService.cancelSubscriptionImmediately(
+        activeSubscription.stripeSubscriptionId,
+      );
 
-    // Update local DB to reflect that it will cancel at period end
-    // BUT DO NOT change status to 'CANCELED' yet. It remains ACTIVE/TRIALING until the period ends.
-    await this.subscriptionRepo.updateSubscription(activeSubscription.id, {
-      cancelAtPeriodEnd: true,
-    });
+      // Update local DB to reflect immediate cancellation
+      await this.subscriptionRepo.updateSubscription(activeSubscription.id, {
+        status: "CANCELED",
+        cancelAtPeriodEnd: false, // It's pointless now as it's canceled
+        currentPeriodEnd: new Date(), // End access now
+      });
 
-    // Do NOT set user type to free yet. That happens when the subscription actually expires.
+      // Downgrade user immediately
+      await this.userRepo.updateUserSubscriptionType(userId, "free");
 
-    return {
-      message:
-        "Subscription cancelled successfully. Access remains until the end of the billing period.",
-    };
+      return {
+        message:
+          "Trial canceled immediately. You no longer have premium access and will not be charged.",
+        canceledImmediately: true,
+      };
+    } else {
+      // Scenario 2: Paid User (ACTIVE) - Cancel at Period End
+      await this.stripeService.cancelSubscription(
+        activeSubscription.stripeSubscriptionId,
+      );
+
+      // Update local DB
+      await this.subscriptionRepo.updateSubscription(activeSubscription.id, {
+        cancelAtPeriodEnd: true,
+      });
+
+      // User status remains ACTIVE until the period ends (handled by webhook or expiration check)
+
+      const formattedDate = new Date(
+        activeSubscription.currentPeriodEnd,
+      ).toLocaleDateString();
+
+      return {
+        message: `Subscription canceled. Your premium access remains valid until ${formattedDate}.`,
+        canceledImmediately: false,
+        validUntil: activeSubscription.currentPeriodEnd,
+      };
+    }
   }
 
   async getUserSubscriptionStatus(userId) {

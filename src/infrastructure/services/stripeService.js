@@ -97,6 +97,18 @@ export class StripeService {
     }
   }
 
+  async cancelSubscriptionImmediately(stripeSubscriptionId) {
+    try {
+      const subscription =
+        await this.stripe.subscriptions.cancel(stripeSubscriptionId);
+      return subscription;
+    } catch (error) {
+      throw new Error(
+        `Failed to cancel subscription immediately: ${error.message}`,
+      );
+    }
+  }
+
   async retrieveSubscription(stripeSubscriptionId) {
     try {
       const subscription =
