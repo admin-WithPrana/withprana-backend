@@ -10,12 +10,18 @@ import {
 } from "../../utils/encryption.js";
 
 export class UserUseCases {
-  constructor(userRepo, otpRepository, mailer, loginHistoryRepository) {
+  constructor(
+    userRepo,
+    otpRepository,
+    mailer,
+    loginHistoryRepository,
+    subscriptionRepo,
+  ) {
     this.userRepository = userRepo;
-    this.otpRepository = otpRepository;
     this.otpRepository = otpRepository;
     this.mailer = mailer;
     this.loginHistoryRepository = loginHistoryRepository;
+    this.subscriptionRepository = subscriptionRepo;
   }
 
   generateRefreshToken() {
@@ -73,6 +79,7 @@ export class UserUseCases {
 
     if (existingUser) {
       if (
+        userData.oauth &&
         JSON.parse(userData.oauth) &&
         existingUser.signupMethod === "email" &&
         existingUser.active !== true
@@ -80,7 +87,7 @@ export class UserUseCases {
         throw new Error("This email is already registered. Please login");
       }
       if (
-        !JSON.parse(userData.oauth) &&
+        (!userData.oauth || !JSON.parse(userData.oauth)) &&
         existingUser.signupMethod !== "email" &&
         existingUser.active !== true
       ) {
@@ -90,7 +97,7 @@ export class UserUseCases {
       }
     }
 
-    if (JSON.parse(userData.oauth) == true) {
+    if (userData.oauth && JSON.parse(userData.oauth) == true) {
       if (existingUser) {
         if (existingUser.active === false) {
           if (existingUser.systemDeactivated) {
@@ -101,10 +108,13 @@ export class UserUseCases {
         }
 
         const updateData = {
-          name: userData.name ? userData.name : undefined,
-          image: userData.image,
           signupMethod: this.signupSelector(Number(userData.method)),
         };
+
+        if (!existingUser.active) {
+          updateData.name = userData.name ? userData.name : undefined;
+          updateData.image = userData.image;
+        }
         Object.keys(updateData).forEach(
           (key) => updateData[key] === undefined && delete updateData[key],
         );
@@ -172,11 +182,9 @@ export class UserUseCases {
       };
     }
 
-    // Non-OAuth flow
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    // Store OTP with encrypted email
     const otp = new OTP({
       email: encryptedEmail,
       otpcode: otpCode,
@@ -198,7 +206,6 @@ export class UserUseCases {
       }
 
       await this.otpRepository.createOTP(otp);
-      // Send email to plain email
       await this.sendOTPEmail(user.email, otpCode);
       return {
         user: existingUser,
@@ -237,7 +244,13 @@ export class UserUseCases {
       throw new Error("User not found");
     }
 
-    if (JSON.parse(user.oauth) === true) {
+    // Safe check for oauth status
+    const isOauth =
+      user.oauth && typeof user.oauth === "string"
+        ? JSON.parse(user.oauth)
+        : user.oauth === true || user.oauth === "true"; // Handle boolean or string true
+
+    if (isOauth === true) {
       throw new Error("OAuth users do not require OTP verification");
     }
 
@@ -312,24 +325,8 @@ export class UserUseCases {
     const refreshToken = this.generateRefreshToken();
     await this.storeRefreshToken(verifiedUser, refreshToken);
 
-    const wasActive = verifiedUser.active; // Capture previous state - WAIT. user is ALREADY verified and active by line 284.
-    // Wait, line 284: let verifiedUser = await this.userRepository.verifyEmail(encryptedEmail);
-    // This typically sets verified and active to true.
-    // So I need to capture state BEFORE line 284?
-    // In `verifyUser` function at line 250:
-    // line 252: let user = await this.userRepository.findByEmail(encryptedEmail);
-    // line 253: if (user) ...
-    // So 'user' holds the state BEFORE verification.
-
-    // Logic:
-    // If 'user.active' was false (or user.isVerified was false), then this is a NEW registration (completing verification).
-    // If 'user.active' was true, then this is a Login (just checking OTP).
-
-    // However, verifyUser is specifically for verifying email/OTP.
-    // If it's a login flow (login -> send OTP -> verify OTP), the user is ALREADY active.
-    // If it's a register flow (register -> send OTP -> verify OTP), the user is NOT active yet (or verified).
-
-    const isNewRegistration = !user.active; // using the 'user' fetch at start of function
+    const wasActive = verifiedUser.active;
+    const isNewRegistration = !user.active;
 
     return {
       success: true,
@@ -400,6 +397,29 @@ export class UserUseCases {
       isActive: true,
     });
 
+    let isSubscribed = false;
+    let subscriptionType = "free";
+
+    if (this.subscriptionRepository) {
+      try {
+        const subStatus = await this.subscriptionRepository.isUserSubscribed(
+          user.id,
+        );
+        if (subStatus.isSubscribed) {
+          isSubscribed = true;
+          subscriptionType = "Premium"; // Or fetch from plan name: subStatus.subscription.plan.name
+          if (subStatus.subscription?.plan?.name) {
+            subscriptionType = subStatus.subscription.plan.name;
+          }
+        }
+      } catch (err) {
+        console.error(
+          "Error checking subscription status during token generation:",
+          err,
+        );
+      }
+    }
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -407,6 +427,8 @@ export class UserUseCases {
         name: user.name ? encrypt(user.name) : undefined,
         role: "USER",
         sessionId: loginHistory.id,
+        isSubscribed: isSubscribed,
+        subscriptionType: subscriptionType,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
@@ -500,7 +522,6 @@ export class UserUseCases {
     if (!user) throw new Error("User not found");
     const decryptedUser = this._decryptUser(user);
 
-    // Rotation: Revoke old
     await this.userRepository.revokeRefreshToken(existingToken.id);
 
     const newAccessToken = this.generateToken(decryptedUser);

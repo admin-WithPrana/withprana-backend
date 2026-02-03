@@ -89,13 +89,24 @@ export class SubscriptionRepository {
     return result;
   }
 
+  async deleteSubscription(where) {
+    try {
+      return await this.prisma.subscription.deleteMany({
+        where,
+      });
+    } catch (error) {
+      console.error("Error deleting subscription:", error);
+      throw error;
+    }
+  }
+
   async findActiveSubscriptionByUserId(userId) {
     // This doesn't return user details, just subscription + plan.
     // But good to check if it does in future.
     return await this.prisma.subscription.findFirst({
       where: {
         userId: userId,
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "TRIALING"] },
         currentPeriodEnd: {
           gt: new Date(),
         },
@@ -272,7 +283,7 @@ export class SubscriptionRepository {
       include: {
         subscriptions: {
           where: {
-            status: "ACTIVE",
+            status: { in: ["ACTIVE", "TRIALING"] },
             currentPeriodEnd: {
               gt: new Date(),
             },
@@ -423,6 +434,14 @@ export class SubscriptionRepository {
     return subscription;
   }
 
+  async findSubscriptionByStripeId(stripeSubscriptionId) {
+    if (!stripeSubscriptionId) return null;
+    return await this.prisma.subscription.findUnique({
+      where: { stripeSubscriptionId },
+      include: { plan: true },
+    });
+  }
+
   async getAdminTransactions(filters = {}) {
     const {
       page = 1,
@@ -508,7 +527,7 @@ export class SubscriptionRepository {
       const activeSubscription = await this.prisma.subscription.findFirst({
         where: {
           userId: userId,
-          status: "ACTIVE",
+          status: { in: ["ACTIVE", "TRIALING"] },
           currentPeriodEnd: {
             gt: new Date(), // not expired
           },

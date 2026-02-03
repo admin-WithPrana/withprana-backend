@@ -5,6 +5,7 @@ import { registerRoutes } from "./interfaces/routes/index.js";
 import { initializeDatabaseConnections } from "./config/database.js";
 import { initializeMailer } from "./config/mail.js";
 import { PostgresOTPRepository } from "./infrastructure/databases/postgres/otpRepository.js";
+import { PrismaUserRepository } from "./infrastructure/databases/postgres/userRepository.js";
 // import { postQueue } from './config/bullmq.js';
 import fastifyRawBody from "fastify-raw-body";
 import rateLimit from "@fastify/rate-limit";
@@ -13,6 +14,9 @@ import {
   meditationQueue,
   inactivityQueue,
 } from "./config/bullmq.js";
+import { StripeService } from "./infrastructure/services/stripeService.js";
+import { NotificationService } from "./infrastructure/services/notificationService.js";
+import { uploadToS3 } from "./infrastructure/services/uploadToS3.js";
 
 const startServer = async () => {
   const app = fastify({ logger: true });
@@ -52,13 +56,22 @@ const startServer = async () => {
 
   const prismaRepository = { prisma };
   const mongoRepository = { mongo: mongoClient };
+  const userRepository = new PrismaUserRepository(prisma); // Initialize repositories
+
+  // Services
+  const stripeService = new StripeService();
+  const notificationService = new NotificationService();
 
   await registerRoutes(app, {
     prismaRepository,
     mongoRepository,
+    userRepository, // Pass the instantiated repository
     mailer,
     thoughtQueue,
     meditationQueue,
+    uploadToS3,
+    notificationService,
+    stripeService,
   });
 
   try {

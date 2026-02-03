@@ -5,15 +5,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-console.log("DEBUG: AWS Config in uploadToS3:");
-console.log("REGION:", process.env.AWS_REGION);
-console.log("ACCESS_KEY:", process.env.AWS_ACCESS_KEY_ID ? "Set" : "Not Set");
-console.log(
-  "SECRET_KEY:",
-  process.env.AWS_SECRET_ACCESS_KEY ? "Set" : "Not Set",
-);
-console.log("BUCKET:", process.env.AWS_S3_BUCKET);
-
 const s3 = new S3Client({
   region: process.env.AWS_REGION || "ap-south-1", // Fallback to avoid crash if missing, but log remains
   credentials: {
