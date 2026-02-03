@@ -130,7 +130,7 @@ export class ThoughtOfTheDayUsecase {
 
   async getTodayThought() {
     try {
-      return await this.thoughtRepository.findOneReleasedToday()
+      return await this.thoughtRepository.findReleasedUntilNow()
     } catch (error) {
       throw new Error(error.message)
     }

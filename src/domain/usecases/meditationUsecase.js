@@ -57,7 +57,7 @@ export class MeditationUsecase {
   async getMeditationById(id, user) {
     const meditation = await this.meditationRepository.findById(id, user?.id);
     if (!meditation) throw new Error("Meditation not found");
-    if (user.role == "USER") {
+    if (user?.role == "USER") {
       const watchHistory = await this.meditationWatchHistoryRepository.create({
         userId: user.id,
         meditationId: meditation.id,
