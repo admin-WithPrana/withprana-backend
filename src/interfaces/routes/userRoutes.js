@@ -84,6 +84,9 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post("/resend-otp", (request, reply) =>
     userController.resendOTP(request, reply),
   );
+  app.post("/check-email", (request, reply) =>
+    userController.checkEmail(request, reply),
+  );
   app.post("/login", (request, reply) => userController.login(request, reply));
   app.post("/logout", { preHandler: authMiddleware }, (request, reply) =>
     userController.logout(request, reply),

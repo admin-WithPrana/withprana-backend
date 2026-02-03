@@ -1,8 +1,9 @@
 export class SubscriptionUseCases {
-  constructor(subscriptionRepository, userRepository, stripeService) {
+  constructor(subscriptionRepository, userRepository, stripeService, mailer) {
     this.subscriptionRepo = subscriptionRepository;
     this.userRepo = userRepository;
     this.stripeService = stripeService;
+    this.mailer = mailer;
   }
 
   async createSubscriptionCheckout(userId, planId) {
@@ -24,10 +25,8 @@ export class SubscriptionUseCases {
         throw new Error("User already has an active subscription");
       }
 
-      // Create or get valid Stripe customer
       const customer = await this.stripeService.createOrGetCustomer(user);
 
-      // Update user with valid Stripe customer ID
       if (user.stripeCustomerId !== customer.id) {
         await this.subscriptionRepo.updateUserStripeCustomerId(
           userId,
@@ -35,9 +34,6 @@ export class SubscriptionUseCases {
         );
       }
 
-      // Create SUBSCRIPTION session
-      // Use plan.trialDays if defined, otherwise default to 7.
-      // Use ?? so that 0 is respected (no trial).
       const trialDays = plan.trialDays ?? 7;
 
       const sessionConfig = {
@@ -110,6 +106,57 @@ export class SubscriptionUseCases {
     } catch (error) {
       console.error("Error in createSubscriptionCheckout:", error);
       throw new Error(`Failed to create payment session: ${error.message}`);
+    }
+  }
+
+  async sendTrialSubscriptionEmail(user, plan, trialEndDate) {
+    try {
+      if (!this.mailer) {
+        console.warn("Mailer not initialized, skipping trial email.");
+        return;
+      }
+
+      const trialEnd = new Date(trialEndDate).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      const nextBillingDate = trialEnd;
+      const amount = `${plan.currency.toUpperCase()} ${plan.price}`;
+
+      const mailOptions = {
+        from: '"Prana App" <no-reply@prana.com>',
+        to: user.email,
+        subject: "Welcome to Prana Premium - Your Trial Details",
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2>Welcome to Prana Premium! 🌿</h2>
+            <p>Hi ${user.name || "there"},</p>
+            <p>Thank you for starting your free trial. We're excited to have you on board!</p>
+            
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <h3 style="margin-top: 0;">Trial Details</h3>
+              <p><strong>Plan:</strong> ${plan.name}</p>
+              <p><strong>Trial Starts:</strong> Today</p>
+              <p><strong>Trial Ends:</strong> ${trialEnd}</p>
+              <p><strong>First Billing Date:</strong> ${nextBillingDate}</p>
+              <p><strong>Amount to be Billed:</strong> ${amount} / ${plan.interval}</p>
+            </div>
+
+            <p>You can cancel anytime before the trial ends to avoid being charged.</p>
+            <p>Enjoy your journey to mindfulness!</p>
+            
+            <p>Best regards,<br>The Prana Team</p>
+          </div>
+        `,
+      };
+
+      await this.mailer.sendMail(mailOptions);
+      console.log(`Trial subscription email sent to ${user.email}`);
+    } catch (error) {
+      console.error("Failed to send trial subscription email:", error);
+      // Don't throw error to prevent rolling back successful subscription
     }
   }
 
@@ -267,6 +314,13 @@ export class SubscriptionUseCases {
             trialDays: trialDays,
           },
         });
+
+        // Send Email Notification
+        await this.sendTrialSubscriptionEmail(
+          user,
+          plan,
+          currentPeriodEnd, // This is the trial end date
+        );
       } else {
         console.log(
           "No trial period. Subscription DB record will be created via webhook after successful payment.",

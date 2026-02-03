@@ -101,6 +101,30 @@ export class UserController {
     }
   }
 
+  async checkEmail(request, reply) {
+    try {
+      const { email } = request.body;
+      if (!email) {
+        return reply.code(400).send({
+          success: false,
+          message: "Email is required",
+        });
+      }
+
+      const exists = await this.userUseCases.checkEmailExists(email);
+
+      return reply.code(200).send({
+        success: true,
+        exists,
+      });
+    } catch (error) {
+      return reply.code(500).send({
+        success: false,
+        message: error.message || "Internal server error",
+      });
+    }
+  }
+
   async login(request, reply) {
     try {
       const userDTO = new CreateUserDTO(request.body);

@@ -7,7 +7,7 @@ import { registerProtectedRoute } from "../../infrastructure/services/registerPr
 
 export const setupSubscriptionRoutes = (
   app,
-  { prismaRepository, userRepository },
+  { prismaRepository, userRepository, mailer },
 ) => {
   const subscriptionRepo = new SubscriptionRepository(prismaRepository.prisma);
   const stripeService = new StripeService();
@@ -15,6 +15,7 @@ export const setupSubscriptionRoutes = (
     subscriptionRepo,
     userRepository,
     stripeService,
+    mailer,
   );
   const subscriptionController = new SubscriptionController(
     subscriptionUseCases,

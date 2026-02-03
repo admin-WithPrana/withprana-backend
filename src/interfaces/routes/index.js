@@ -35,6 +35,7 @@ export async function registerRoutes(app, deps) {
     async function (subscriptionScope) {
       setupSubscriptionRoutes(subscriptionScope, {
         prismaRepository: deps.prismaRepository,
+        mailer: deps.mailer,
         userRepository: deps.userRepository || {
           findById: (id) =>
             deps.prismaRepository.prisma.user.findUnique({

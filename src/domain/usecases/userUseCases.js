@@ -77,6 +77,11 @@ export class UserUseCases {
     let existingUser = await this.userRepository.findByEmail(encryptedEmail);
     if (existingUser) existingUser = this._decryptUser(existingUser);
 
+    // New Logic: If isLogin is true (Sign In), strict check for existing user.
+    if (userData.oauth && userData.isLogin === true && !existingUser) {
+      throw new Error("User not found. Please sign up.");
+    }
+
     if (existingUser) {
       if (
         userData.oauth &&
@@ -337,6 +342,12 @@ export class UserUseCases {
       register: isNewRegistration,
       message: "OTP verified successfully",
     };
+  }
+
+  async checkEmailExists(email) {
+    const encryptedEmail = encryptDeterministic(email.toLowerCase());
+    const user = await this.userRepository.findByEmail(encryptedEmail);
+    return !!user;
   }
 
   async login(email, oauth) {
