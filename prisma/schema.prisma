@@ -56,7 +56,7 @@ model User {
   active           Boolean        @default(false)
   image            String?
   signupMethod     String         @default("email") @db.VarChar(20)
-  subscriptionType String         @default("free")
+  subscriptionType String         @default("Free")
   stripeCustomerId String?
   likedMeditations Liked[]
   playlists        Playlist[]
@@ -326,7 +326,7 @@ model Subscription {
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions         Transaction[]
 
-  @@unique([userId, status])
+  // @@unique([userId, status]) - Removed to allow history of canceled subscriptions
   @@map("subscriptions")
 }
 

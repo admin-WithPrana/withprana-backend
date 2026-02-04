@@ -101,8 +101,6 @@ export class SubscriptionRepository {
   }
 
   async findActiveSubscriptionByUserId(userId) {
-    // This doesn't return user details, just subscription + plan.
-    // But good to check if it does in future.
     return await this.prisma.subscription.findFirst({
       where: {
         userId: userId,
@@ -118,9 +116,6 @@ export class SubscriptionRepository {
   }
 
   async createTransaction(data) {
-    // FIXED: Removed the console.log that was preventing transaction creation
-    console.log("Creating transaction:", data);
-
     const result = await this.prisma.transaction.create({
       data: {
         userId: data.userId,

@@ -350,20 +350,18 @@ export class SubscriptionUseCases {
         );
 
       if (existingSubscription) {
-        // Update subscription status to CANCELED
         await this.subscriptionRepo.updateSubscription(
           existingSubscription.id,
           {
             status: "CANCELED",
             cancelAtPeriodEnd: false,
-            currentPeriodEnd: new Date(), // End it now
+            currentPeriodEnd: new Date(),
           },
         );
 
-        // Revert user to free plan immediately
         await this.userRepo.updateUserSubscriptionType(
           existingSubscription.userId,
-          "free",
+          "Free",
         );
 
         console.log(
@@ -868,50 +866,100 @@ export class SubscriptionUseCases {
       throw new Error("Subscription cannot be cancelled (missing Stripe ID)");
     }
 
-    if (activeSubscription.status === "TRIALING") {
-      // Scenario 1: Trial User - Cancel IMMEDIATELY
+    // Get User details for email
+    const user = await this.userRepo.findById(userId);
+    const userEmail = user ? user.email : "Unknown Email";
+
+    // CANCEL IMMEDIATELY FOR ALL (Paid or Trial)
+    try {
       await this.stripeService.cancelSubscriptionImmediately(
         activeSubscription.stripeSubscriptionId,
       );
+    } catch (error) {
+      // If subscription is already canceled/deleted in Stripe, we proceed to update local DB
+      if (error.message && error.message.includes("No such subscription")) {
+        console.warn(
+          `Stripe subscription ${activeSubscription.stripeSubscriptionId} already deleted. Proceeding with local cancellation.`,
+        );
+      } else {
+        throw error; // Re-throw other errors
+      }
+    }
 
-      // Update local DB to reflect immediate cancellation
+    // Update local DB
+    // Handle unique constraint @@unique([userId, status]) - REMOVED so we can just update status
+    try {
       await this.subscriptionRepo.updateSubscription(activeSubscription.id, {
         status: "CANCELED",
-        cancelAtPeriodEnd: false, // It's pointless now as it's canceled
-        currentPeriodEnd: new Date(), // End access now
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: new Date(), // End access immediately
       });
-
-      // Downgrade user immediately
-      await this.userRepo.updateUserSubscriptionType(userId, "free");
-
-      return {
-        message:
-          "Trial canceled immediately. You no longer have premium access and will not be charged.",
-        canceledImmediately: true,
-      };
-    } else {
-      // Scenario 2: Paid User (ACTIVE) - Cancel at Period End
-      await this.stripeService.cancelSubscription(
-        activeSubscription.stripeSubscriptionId,
+    } catch (error) {
+      console.warn(
+        "Failed to update subscription status to CANCELED:",
+        error.message,
       );
-
-      // Update local DB
-      await this.subscriptionRepo.updateSubscription(activeSubscription.id, {
-        cancelAtPeriodEnd: true,
-      });
-
-      // User status remains ACTIVE until the period ends (handled by webhook or expiration check)
-
-      const formattedDate = new Date(
-        activeSubscription.currentPeriodEnd,
-      ).toLocaleDateString();
-
-      return {
-        message: `Subscription canceled. Your premium access remains valid until ${formattedDate}.`,
-        canceledImmediately: false,
-        validUntil: activeSubscription.currentPeriodEnd,
-      };
+      // We still proceed to downgrade user
     }
+
+    // Downgrade user immediately
+    await this.userRepo.updateUserSubscriptionType(userId, "Free");
+
+    // Send Email to Admin
+    if (this.mailer) {
+      const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com";
+      try {
+        await this.mailer.sendMail({
+          from: process.env.MAIL_FROM || '"Prana App" <no-reply@prana.app>',
+          to: adminEmail,
+          subject: "User Subscription Cancelled - Refund Action Required",
+          html: `
+                  <div style="font-family: Arial, sans-serif; color: #333;">
+                    <h2>Subscription Cancellation Alert</h2>
+                    <p>User <strong>${userEmail}</strong> (ID: ${userId}) has cancelled their subscription.</p>
+                    <p><strong>Action Required:</strong> Please check if a refund is due and process it manually in the Stripe Dashboard.</p>
+                    <p>The user's access has been revoked and plan downgraded to Free.</p>
+                  </div>
+                `,
+        });
+        console.log(`Admin notification sent for user ${userId} cancellation.`);
+      } catch (mailError) {
+        console.error("Failed to send admin notification:", mailError);
+      }
+    }
+
+    // Send Cancellation Confirmation to User
+    if (this.mailer && userEmail && userEmail !== "Unknown Email") {
+      try {
+        await this.mailer.sendMail({
+          from:
+            process.env.MAIL_FROM ||
+            '"Being One Within" <no-reply@beingonewithin.app>',
+          to: userEmail,
+          subject: "Subscription Canceled - Being One Within",
+          html: `
+                  <div style="font-family: Arial, sans-serif; color: #333;">
+                    <h2>Subscription Canceled</h2>
+                    <p>Hello,</p>
+                    <p>Your subscription to <strong>Being One Within</strong> has been canceled as requested.</p>
+                    <p>Your account has been downgraded to the Free plan. You will no longer be charged.</p>
+                    <p>We're sorry to see you go! If you have any feedback or questions, please reply to this email.</p>
+                    <br/>
+                    <p>Best regards,<br>The Being One Within Team</p>
+                  </div>
+                `,
+        });
+        console.log(`Cancellation email sent to user ${userEmail}`);
+      } catch (userMailError) {
+        console.error("Failed to send user cancellation email:", userMailError);
+      }
+    }
+
+    return {
+      message:
+        "Subscription canceled immediately. Your plan has been downgraded to Free.",
+      canceledImmediately: true,
+    };
   }
 
   async getUserSubscriptionStatus(userId) {
@@ -1084,7 +1132,7 @@ export class SubscriptionUseCases {
       // Downgrade user
       await this.userRepo.updateUserSubscriptionType(
         subscription.userId,
-        "free",
+        "Free",
       );
 
       return updatedSubscription;

@@ -37,7 +37,7 @@ export class UserUseCases {
     });
   }
 
-  subscriptionType = ["free", "premium", "enterprise"];
+  subscriptionType = ["Free", "Premium"];
 
   signupSelector(type) {
     let subType = "email";
@@ -68,7 +68,7 @@ export class UserUseCases {
       image: userData.image,
       oauth: userData.oauth,
       signupMethod: this.signupSelector(Number(userData.method)),
-      subscriptionType: "free",
+      subscriptionType: "Free",
     });
 
     user.validate();
@@ -409,7 +409,7 @@ export class UserUseCases {
     });
 
     let isSubscribed = false;
-    let subscriptionType = "free";
+    let subscriptionType = "Free";
 
     if (this.subscriptionRepository) {
       try {
