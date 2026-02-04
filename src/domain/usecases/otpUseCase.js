@@ -55,7 +55,7 @@ export class OTPUseCase {
 
   async sendOTPEmail(email, otpCode) {
     const mailOptions = {
-      from: '"Prana App" <no-reply@yourapp.com>', // consistent with UserUseCases
+      from: '"Being One Within" <no-reply@yourapp.com>', // consistent with UserUseCases
       to: email,
       subject: "OTP for verification",
       text: `Your OTP is: ${otpCode}`,

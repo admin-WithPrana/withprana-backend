@@ -4,9 +4,7 @@ import cors from "@fastify/cors";
 import { registerRoutes } from "./interfaces/routes/index.js";
 import { initializeDatabaseConnections } from "./config/database.js";
 import { initializeMailer } from "./config/mail.js";
-import { PostgresOTPRepository } from "./infrastructure/databases/postgres/otpRepository.js";
 import { PrismaUserRepository } from "./infrastructure/databases/postgres/userRepository.js";
-// import { postQueue } from './config/bullmq.js';
 import fastifyRawBody from "fastify-raw-body";
 import rateLimit from "@fastify/rate-limit";
 import {
@@ -17,6 +15,7 @@ import {
 import { StripeService } from "./infrastructure/services/stripeService.js";
 import { NotificationService } from "./infrastructure/services/notificationService.js";
 import { uploadToS3 } from "./infrastructure/services/uploadToS3.js";
+import { initializeSubscriptionCron } from "./infrastructure/jobs/subscriptionCron.js";
 
 const startServer = async () => {
   const app = fastify({ logger: true });
@@ -26,10 +25,10 @@ const startServer = async () => {
   };
 
   await app.register(fastifyRawBody, {
-    field: "rawBody", // request.rawBody will be set
-    global: false, // only apply to routes with config.rawBody = true
-    encoding: false, // keep it as Buffer, not string!
-    runFirst: true, // ensures it runs before any other body parser
+    field: "rawBody",
+    global: false,
+    encoding: false,
+    runFirst: true,
   });
 
   await app.register(cors, {
@@ -39,7 +38,7 @@ const startServer = async () => {
   });
 
   await app.register(rateLimit, {
-    max: 60, // each user/IP can make 60 requests per minute
+    max: 60,
     timeWindow: "1 minute",
     allowList: ["127.0.0.1"],
     keyGenerator: (req) => req.user?.id || req.ip,
@@ -53,6 +52,9 @@ const startServer = async () => {
 
   const { prisma, mongoClient } = await initializeDatabaseConnections();
   const mailer = initializeMailer();
+
+  // Initialize subscription expiry cron job
+  initializeSubscriptionCron(prisma, mailer);
 
   const prismaRepository = { prisma };
   const mongoRepository = { mongo: mongoClient };
@@ -75,7 +77,7 @@ const startServer = async () => {
   });
 
   try {
-    const address = await app.listen({
+    const address =  app.listen({
       port: process.env.PORT || 3000,
       host: "0.0.0.0",
     });
@@ -88,13 +90,12 @@ const startServer = async () => {
 
 startServer();
 
-// Schedule inactivity check daily
 inactivityQueue.add(
   "checkInactivity",
   {},
   {
     repeat: {
-      pattern: "0 0 * * *", // Run once a day at midnight
+      pattern: "0 0 * * *",
     },
   },
 );

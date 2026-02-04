@@ -7,6 +7,19 @@ export class StripeService {
     });
   }
 
+  async createEphemeralKey(customerId, apiVersion = "2023-10-16") {
+    try {
+      const ephemeralKey = await this.stripe.ephemeralKeys.create(
+        { customer: customerId },
+        { apiVersion: apiVersion },
+      );
+      return ephemeralKey;
+    } catch (error) {
+      console.error("Stripe ephemeral key creation error:", error);
+      throw new Error(`Failed to create ephemeral key: ${error.message}`);
+    }
+  }
+
   async createCustomer(user) {
     try {
       const customer = await this.stripe.customers.create({

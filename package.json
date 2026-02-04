@@ -1,5 +1,5 @@
 {
-  "name": "prana",
+  "name": "beingonewithin",
   "type": "module",
   "version": "1.0.0",
   "scripts": {
@@ -26,6 +26,7 @@
     "mongodb": "^5.3.0",
     "multer": "^2.0.2",
     "mysql2": "^3.3.5",
+    "node-cron": "^4.2.1",
     "nodemailer": "^6.9.3",
     "pdfkit": "^0.17.2",
     "postgres": "^3.4.7",

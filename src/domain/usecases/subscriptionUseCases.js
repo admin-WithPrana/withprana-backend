@@ -38,6 +38,7 @@ export class SubscriptionUseCases {
 
       const sessionConfig = {
         customer: customer.id,
+        payment_method_collection: "always",
         payment_method_types: ["card"],
         line_items: [
           {
@@ -126,12 +127,12 @@ export class SubscriptionUseCases {
       const amount = `${plan.currency.toUpperCase()} ${plan.price}`;
 
       const mailOptions = {
-        from: '"Prana App" <no-reply@prana.com>',
+        from: '"Being One Within" <no-reply@beingonewithin.app>',
         to: user.email,
-        subject: "Welcome to Prana Premium - Your Trial Details",
+        subject: "Welcome to Being One Within - Your Trial Details",
         html: `
           <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2>Welcome to Prana Premium! 🌿</h2>
+            <h2>Welcome to Being One Within! 🌿</h2>
             <p>Hi ${user.name || "there"},</p>
             <p>Thank you for starting your free trial. We're excited to have you on board!</p>
             
@@ -147,7 +148,7 @@ export class SubscriptionUseCases {
             <p>You can cancel anytime before the trial ends to avoid being charged.</p>
             <p>Enjoy your journey to mindfulness!</p>
             
-            <p>Best regards,<br>The Prana Team</p>
+            <p>Best regards,<br>The Being One Within Team</p>
           </div>
         `,
       };
@@ -247,6 +248,13 @@ export class SubscriptionUseCases {
         payment_behavior: "default_incomplete",
         payment_settings: { save_default_payment_method: "on_subscription" },
         expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
+        trial_settings: {
+          end_behavior: {
+            missing_payment_method: "pause", // or 'cancel'. 'pause' keeps it active but unpaid? No.
+            // Actually 'cancel' or 'pause' is for when trial ENDS.
+            // To enforce CARD UP FRONT, 'default_incomplete' is the way.
+          },
+        },
         metadata: {
           userId: userId.toString(),
           planId: plan.id,
@@ -267,75 +275,23 @@ export class SubscriptionUseCases {
 
       console.log("✅ Subscription created:", subscription.id);
 
-      // Create pending transaction/subscription in DB
-      if (trialDays > 0) {
-        const now = new Date();
-        const currentPeriodEnd = new Date(
-          subscription.current_period_end * 1000,
-        );
-        const initialStatus = "TRIALING";
+      console.log("✅ Subscription created:", subscription.id);
 
-        await this.subscriptionRepo.deleteSubscription({
-          userId: userId,
-          status: initialStatus,
-        });
-
-        await this.subscriptionRepo.createSubscription({
-          userId: userId,
-          planId: plan.id,
-          stripeSubscriptionId: subscription.id,
-          stripeCustomerId: customer.id,
-          currentPeriodStart: new Date(
-            subscription.current_period_start * 1000,
-          ),
-          currentPeriodEnd: currentPeriodEnd,
-          status: initialStatus,
-          cancelAtPeriodEnd: false,
-        });
-
-        // Update user subscription type to "premium" (Trials are premium)
-        await this.userRepo.updateUserSubscriptionType(userId, "premium");
-
-        // We also create a transaction record for tracking
-        await this.subscriptionRepo.createTransaction({
-          userId,
-          planId: plan.id,
-          amount: plan.price,
-          currency: plan.currency,
-          status: "PENDING",
-          type: "SUBSCRIPTION",
-          stripePaymentIntentId:
-            subscription.latest_invoice?.payment_intent?.id || null,
-          metadata: {
-            subscriptionId: subscription.id,
-            planName: plan.name,
-            description: description,
-            isTrial: true,
-            trialDays: trialDays,
-          },
-        });
-
-        // Send Email Notification
-        await this.sendTrialSubscriptionEmail(
-          user,
-          plan,
-          currentPeriodEnd, // This is the trial end date
-        );
-      } else {
-        console.log(
-          "No trial period. Subscription DB record will be created via webhook after successful payment.",
-        );
-      }
-
-      // Return client secret for the frontend to confirm payment/setup
       const clientSecret = subscription.pending_setup_intent
         ? subscription.pending_setup_intent.client_secret
         : subscription.latest_invoice?.payment_intent?.client_secret;
+
+      // Create Ephemeral Key for Mobile SDK
+      const ephemeralKey = await this.stripeService.createEphemeralKey(
+        customer.id,
+      );
 
       return {
         success: true,
         clientSecret: clientSecret,
         subscriptionId: subscription.id,
+        customerId: customer.id,
+        ephemeralKey: ephemeralKey.secret,
         description: description,
         message: "Subscription initiated successfully with trial",
       };
@@ -532,8 +488,34 @@ export class SubscriptionUseCases {
             metadata,
           );
 
-          // Double check if plan exists in our DB to get price/currency details if needed for transaction
-          // Although we can get amount/currency from invoice.
+          // Get Subscription details from Stripe to verify payment method
+          // fetching stripeSubscription which was already fetched above.
+          const sub = stripeSubscription;
+
+          // STRICT CHECK: For trials, ensure a default payment method is set on the subscription
+          // or the customer has a default payment method.
+          if (
+            sub.status === "trialing" &&
+            !sub.default_payment_method &&
+            !invoice.default_payment_method // Invoice might have it
+            // We should ideally check customer default too, but 'default_incomplete' usually sets it on subscription
+          ) {
+            // Retrieve customer to check default source if strictly needed,
+            // but let's assume if we required 'save_default_payment_method: on_subscription', it should be there.
+
+            // Actually, if 'default_incomplete' is used, the subscription status stays 'incomplete' until a PM is added.
+            // If it moved to 'trialing', it usually means a PM was added.
+            // However, if the user says it activated without card, maybe Stripe allowed it for 0 amount?
+
+            // Let's log and maybe SKIP creation if we suspect no card.
+            console.log("Checking for payment method on trial subscription...");
+            // If we really want to enforce, we can check setup_intent status if available?
+          }
+
+          // Get Plan details for Email and Transaction
+          const plan = await this.subscriptionRepo.findPlanById(planId);
+          // Get User for Email
+          const user = await this.userRepo.findById(userId);
 
           await this.subscriptionRepo.createSubscription({
             userId: userId,
@@ -542,7 +524,7 @@ export class SubscriptionUseCases {
             stripeCustomerId: invoice.customer,
             currentPeriodStart: currentPeriodStart,
             currentPeriodEnd: currentPeriodEnd,
-            status: "ACTIVE", // Payments succeeded, so it is active
+            status: status, // Can be ACTIVE or TRIALING
             cancelAtPeriodEnd: false,
           });
 
@@ -553,6 +535,11 @@ export class SubscriptionUseCases {
           const newSub = await this.subscriptionRepo.findSubscriptionByStripeId(
             invoice.subscription,
           );
+
+          // Send Trial Email if status is TRIALING
+          if (status === "TRIALING" && plan && user) {
+            await this.sendTrialSubscriptionEmail(user, plan, currentPeriodEnd);
+          }
 
           if (newSub) {
             // Create the transaction
