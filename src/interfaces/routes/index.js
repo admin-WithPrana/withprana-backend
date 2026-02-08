@@ -19,6 +19,7 @@ import { sarLogRoutes } from "./ssrLogRoute.js";
 import { otpRoutes } from "./otpRoutes.js";
 import { supportRoutes } from "./supportRoutes.js";
 import { notificationPreferencesRoutes } from "./notificationPreferencesRoutes.js";
+import { downloadedMeditationRoutes } from "./downloadedMeditationRoutes.js";
 
 export async function registerRoutes(app, deps) {
   // ------------------------ PUBLIC ROUTES ------------------------
@@ -71,6 +72,16 @@ export async function registerRoutes(app, deps) {
     { prefix: "/api/user" },
   );
 
+  app.register(
+    async function (onboardScope) {
+      onboardingRoutes(onboardScope, {
+        prismaRepository: deps.prismaRepository,
+        postQueue: deps.postQueue,
+      });
+    },
+    { prefix: "/api/onboard" },
+  );
+
   // ------------------------ PROTECTED ROUTES ------------------------
 
   registerProtectedRoute(app, "/api/admin", adminRoutes, {
@@ -114,11 +125,6 @@ export async function registerRoutes(app, deps) {
     postQueue: deps.postQueue,
   });
 
-  registerProtectedRoute(app, "/api/onboard", onboardingRoutes, {
-    prismaRepository: deps.prismaRepository,
-    postQueue: deps.postQueue,
-  });
-
   registerProtectedRoute(app, "/api/usertags", userTagsRoutes, {
     prismaRepository: deps.prismaRepository,
   });
@@ -152,4 +158,8 @@ export async function registerRoutes(app, deps) {
       prismaRepository: deps.prismaRepository,
     },
   );
+
+  registerProtectedRoute(app, "/api/downloads", downloadedMeditationRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
 }

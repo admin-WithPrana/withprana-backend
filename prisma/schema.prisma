@@ -72,6 +72,7 @@ model User {
   fcmToken         String?       @map("fcm_token")
   sarLogs          SARLogRequest[]
   notificationPreferences NotificationPreferences?
+  downloadedMeditations DownloadedMeditation[]
 
   @@map("users")
 }
@@ -134,6 +135,7 @@ model Meditation {
   subcategory    Subcategory?         @relation(fields: [subcategoryId], references: [id])
   playlistItems  PlaylistMeditation[]
   watchHistory   MeditationWatchHistory[]
+  downloadedBy   DownloadedMeditation[]
 
   @@map("meditations")
 }
@@ -154,6 +156,19 @@ model MeditationWatchHistory {
   @@index([watchedAt])
   @@unique([userId, meditationId, watchedAt])
   @@map("meditation_watch_history")
+}
+
+model DownloadedMeditation {
+  id           String     @id @default(uuid())
+  userId       String
+  meditationId String
+  downloadedAt DateTime   @default(now()) @map("downloaded_at")
+  
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meditation   Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, meditationId])
+  @@map("downloaded_meditations")
 }
 
 model Tag {

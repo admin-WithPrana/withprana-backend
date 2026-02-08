@@ -350,4 +350,44 @@ export class MeditationRepository {
       }
     }
   }
+
+  async findByTagId(tagId, userId) {
+    await this.ensurePrisma();
+
+    const data = await this.prisma.meditation.findMany({
+      where: {
+        isDeleted: false,
+        meditationTags: {
+          some: { tagId: tagId },
+        },
+      },
+      include: {
+        category: true,
+        subcategory: true,
+        meditationTags: {
+          include: {
+            tag: true,
+          },
+        },
+        ...(userId && {
+          likedUsers: {
+            where: { userId: userId },
+            select: { id: true },
+          },
+        }),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const transformedData = data.map((meditation) => {
+      let isLiked = false;
+      if (userId && meditation.likedUsers) {
+        isLiked = meditation.likedUsers.length > 0;
+        delete meditation.likedUsers;
+      }
+      return { ...meditation, isLiked };
+    });
+
+    return transformedData;
+  }
 }

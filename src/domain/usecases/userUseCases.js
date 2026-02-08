@@ -450,7 +450,7 @@ export class UserUseCases {
         subscriptionType: subscriptionType,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" },
+      { expiresIn: "1d" },
     );
 
     return {

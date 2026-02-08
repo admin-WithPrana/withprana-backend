@@ -147,4 +147,8 @@ export class MeditationUsecase {
   async getPopularMeditations(limit = 10) {
     return this.meditationRepository.findMostPopular(limit);
   }
+
+  async getMeditationsByTagId(tagId, user) {
+    return this.meditationRepository.findByTagId(tagId, user?.id);
+  }
 }

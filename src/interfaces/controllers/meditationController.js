@@ -174,4 +174,18 @@ export class MeditationController {
       reply.status(400).send({ message: err.message });
     }
   }
+
+  async getMeditationsByTagId(req, reply) {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+      const result = await this.meditationUsecase.getMeditationsByTagId(
+        id,
+        user,
+      );
+      reply.send(result);
+    } catch (err) {
+      reply.status(500).send({ message: err.message });
+    }
+  }
 }
