@@ -483,7 +483,27 @@ export class UserUseCases {
 
   async getUserById(id) {
     const user = await this.userRepository.findById(id);
-    return this._decryptUser(user);
+    const decryptedUser = this._decryptUser(user);
+
+    if (decryptedUser && this.subscriptionRepository) {
+      try {
+        const subStatus = await this.subscriptionRepository.isUserSubscribed(
+          decryptedUser.id,
+        );
+        decryptedUser.isSubscribed = subStatus.isSubscribed;
+      } catch (error) {
+        console.error(
+          "Error fetching subscription status for user:",
+          id,
+          error,
+        );
+        decryptedUser.isSubscribed = false;
+      }
+    } else if (decryptedUser) {
+      decryptedUser.isSubscribed = false;
+    }
+
+    return decryptedUser;
   }
 
   async deactivateUser(id) {
