@@ -1,6 +1,7 @@
 import { UserController } from "../controllers/userController.js";
 import { PostgresOTPRepository } from "../../infrastructure/databases/postgres/otpRepository.js";
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
+import { NotificationService } from "../../infrastructure/services/notificationService.js";
 import fastifyMultipart from "@fastify/multipart";
 import { LoginHistoryRepository } from "../../infrastructure/databases/postgres/loginHistoryRepository.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
@@ -19,11 +20,12 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
     prismaRepository.prisma,
   );
   const subscriptionRepo = new SubscriptionRepository(prismaRepository.prisma);
+  const notificationService = new NotificationService();
 
   const userController = new UserController(
     userRepo,
     otpRepo,
-    mailer,
+    notificationService,
     loginHistoryRepository,
     subscriptionRepo,
   );

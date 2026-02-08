@@ -182,6 +182,9 @@ export class SubscriptionRepository {
 
       // Alternative: Try to find by payment intent if available in data
       if (data.stripePaymentIntentId) {
+        console.log(
+          `[DEBUG] updateTransactionByCheckoutSession: Attempting lookup by stripePaymentIntentId: ${data.stripePaymentIntentId}`,
+        );
         const transactionByPaymentIntent =
           await this.prisma.transaction.findFirst({
             where: {
@@ -190,10 +193,19 @@ export class SubscriptionRepository {
           });
 
         if (transactionByPaymentIntent) {
+          console.log(
+            `[DEBUG] updateTransactionByCheckoutSession: Found transaction ${transactionByPaymentIntent.id} by PaymentIntentID`,
+          );
           return await this.prisma.transaction.update({
             where: { id: transactionByPaymentIntent.id },
             data,
           });
+        } else {
+          console.log(
+            `[DEBUG] updateTransactionByCheckoutSession: Transaction NOT found by PaymentIntentID: ${data.stripePaymentIntentId}`,
+          );
+          // Dump recent transactions for this payment intent ID just in case of mismatch?
+          // Or maybe dump all transactions for reference? No, too many.
         }
       }
 

@@ -1,9 +1,14 @@
 export class SubscriptionUseCases {
-  constructor(subscriptionRepository, userRepository, stripeService, mailer) {
+  constructor(
+    subscriptionRepository,
+    userRepository,
+    stripeService,
+    notificationService,
+  ) {
     this.subscriptionRepo = subscriptionRepository;
     this.userRepo = userRepository;
     this.stripeService = stripeService;
-    this.mailer = mailer;
+    this.notificationService = notificationService;
   }
 
   async createSubscriptionCheckout(userId, planId) {
@@ -35,11 +40,22 @@ export class SubscriptionUseCases {
       }
 
       const trialDays = plan.trialDays ?? 7;
+      console.log(
+        `[DEBUG] createSubscriptionCheckout: Plan ${plan.name} has trialDays: ${trialDays}`,
+      );
 
       const sessionConfig = {
         customer: customer.id,
         payment_method_collection: "always",
         payment_method_types: ["card"],
+        mode: "subscription",
+        success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+        metadata: {
+          userId: userId.toString(),
+          planId: plan.id,
+          type: "SUBSCRIPTION_PAYMENT",
+        },
         line_items: [
           {
             price_data: {
@@ -48,7 +64,7 @@ export class SubscriptionUseCases {
                 name: plan.name,
                 description: `${plan.intervalCount} ${plan.interval}(s) subscription`,
               },
-              unit_amount: Math.round(plan.price * 100), // Convert to cents
+              unit_amount: Math.round(plan.price * 100),
               recurring: {
                 interval: plan.interval,
                 interval_count: plan.intervalCount,
@@ -57,24 +73,57 @@ export class SubscriptionUseCases {
             quantity: 1,
           },
         ],
-        mode: "subscription",
         subscription_data: {
           metadata: {
             userId: userId.toString(),
             planId: plan.id,
           },
         },
-        success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
-        metadata: {
-          userId: userId.toString(),
-          planId: plan.id,
-          type: "SUBSCRIPTION_PAYMENT",
-        },
       };
 
       if (trialDays > 0) {
-        sessionConfig.subscription_data.trial_period_days = trialDays;
+        console.log(
+          "[DEBUG] Using PAYMENT mode (Validation Charge) for trial subscription",
+        );
+        // For trials, we charge a small amount to validate and remove the card, then refund.
+        sessionConfig.mode = "payment";
+        sessionConfig.currency = plan.currency.toLowerCase();
+
+        // Remove subscription-specific fields
+        delete sessionConfig.subscription_data;
+
+        // Add Validation Line Item (e.g., 1.00)
+        sessionConfig.line_items = [
+          {
+            price_data: {
+              currency: plan.currency.toLowerCase(),
+              product_data: {
+                name: "Card Validation (Refundable)",
+                description:
+                  "A temporary charge to validate your card. This will be fully refunded immediately.",
+              },
+              unit_amount: 100, // 1.00 unit (e.g., $1.00 or ₹1.00 if INR handles cents differently usually 100 paise)
+            },
+            quantity: 1,
+          },
+        ];
+
+        // IMPORTANT: Save the card for future use (the subscription)
+        sessionConfig.payment_intent_data = {
+          setup_future_usage: "off_session",
+        };
+
+        // Update metadata for the webhook handler
+        sessionConfig.metadata = {
+          ...sessionConfig.metadata,
+          type: "TRIAL_VALIDATION_CHARGE", // New Type
+          trialDays: trialDays.toString(),
+          planPrice: plan.price.toString(),
+          planCurrency: plan.currency,
+          planName: plan.name,
+          planInterval: plan.interval,
+          planIntervalCount: plan.intervalCount.toString(),
+        };
       }
 
       const session =
@@ -126,34 +175,11 @@ export class SubscriptionUseCases {
       const nextBillingDate = trialEnd;
       const amount = `${plan.currency.toUpperCase()} ${plan.price}`;
 
-      const mailOptions = {
-        from: '"Being One Within" <no-reply@beingonewithin.app>',
-        to: user.email,
-        subject: "Welcome to Being One Within - Your Trial Details",
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2>Welcome to Being One Within! 🌿</h2>
-            <p>Hi ${user.name || "there"},</p>
-            <p>Thank you for starting your free trial. We're excited to have you on board!</p>
-            
-            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <h3 style="margin-top: 0;">Trial Details</h3>
-              <p><strong>Plan:</strong> ${plan.name}</p>
-              <p><strong>Trial Starts:</strong> Today</p>
-              <p><strong>Trial Ends:</strong> ${trialEnd}</p>
-              <p><strong>First Billing Date:</strong> ${nextBillingDate}</p>
-              <p><strong>Amount to be Billed:</strong> ${amount} / ${plan.interval}</p>
-            </div>
-
-            <p>You can cancel anytime before the trial ends to avoid being charged.</p>
-            <p>Enjoy your journey to mindfulness!</p>
-            
-            <p>Best regards,<br>The Being One Within Team</p>
-          </div>
-        `,
-      };
-
-      await this.mailer.sendMail(mailOptions);
+      await this.notificationService.sendTrialStartedEmail(
+        user,
+        plan,
+        trialEndDate,
+      );
       console.log(`Trial subscription email sent to ${user.email}`);
     } catch (error) {
       console.error("Failed to send trial subscription email:", error);
@@ -170,6 +196,11 @@ export class SubscriptionUseCases {
 
       const plan = await this.subscriptionRepo.findPlanById(planId);
       if (!plan) throw new Error("Invalid subscription plan");
+
+      const trialDays = plan.trialDays ?? 7;
+      console.log(
+        `[DEBUG] createAppSubscriptionCheckout: Plan ${plan.name} has trialDays: ${trialDays}`,
+      );
 
       // Check for active subscription
       const activeSubscription =
@@ -218,11 +249,63 @@ export class SubscriptionUseCases {
       // Create proper description for Indian regulations
       const description = `Meditation App Subscription: ${plan.name} - ${plan.intervalCount} ${plan.interval}(s) access`;
 
-      // Create SUBSCRIPTION instead of PaymentIntent
-      const trialDays = plan.trialDays ?? 7;
-      console.log(
-        `Creating subscription with ${trialDays} days trial for user ${userId}`,
-      );
+      // debug fix - removed duplicate declaration
+      if (trialDays > 0) {
+        console.log(
+          `[DEBUG] createAppSubscriptionCheckout: creating Validation Charge for trial plan.`,
+        );
+
+        // Create a PaymentIntent for 1.00 unit to validate card
+        const paymentIntent =
+          await this.stripeService.stripe.paymentIntents.create({
+            amount: 100, // 1.00 unit
+            currency: plan.currency.toLowerCase(),
+            customer: customer.id,
+            setup_future_usage: "off_session",
+            description: "Card Validation (Refundable)",
+            metadata: {
+              type: "APP_TRIAL_VALIDATION",
+              userId: userId.toString(),
+              planId: plan.id,
+              planName: plan.name,
+              planPrice: plan.price.toString(),
+              planCurrency: plan.currency,
+              planInterval: plan.interval,
+              planIntervalCount: plan.intervalCount.toString(),
+              trialDays: trialDays.toString(),
+            },
+          });
+
+        // Create transaction record for this validation charge
+        await this.subscriptionRepo.createTransaction({
+          userId,
+          planId: plan.id,
+          amount: 1, // 1.00
+          currency: plan.currency,
+          status: "PENDING",
+          type: "VALIDATION",
+          stripePaymentIntentId: paymentIntent.id,
+          description: "Trial Validation Charge",
+          metadata: {
+            type: "APP_TRIAL_VALIDATION",
+          },
+        });
+
+        const ephemeralKey = await this.stripeService.createEphemeralKey(
+          customer.id,
+        );
+
+        return {
+          success: true,
+          clientSecret: paymentIntent.client_secret,
+          customerId: customer.id,
+          ephemeralKey: ephemeralKey.secret,
+          trialValidation: true, // Flag to tell frontend this is a validation charge
+        };
+      }
+
+      // NO TRIAL - Standard Subscription Creation
+      console.log(`Creating subscription (No Trial) for user ${userId}`);
 
       // Create Product for the subscription
       const product = await this.stripeService.stripe.products.create({
@@ -248,13 +331,6 @@ export class SubscriptionUseCases {
         payment_behavior: "default_incomplete",
         payment_settings: { save_default_payment_method: "on_subscription" },
         expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
-        trial_settings: {
-          end_behavior: {
-            missing_payment_method: "pause", // or 'cancel'. 'pause' keeps it active but unpaid? No.
-            // Actually 'cancel' or 'pause' is for when trial ENDS.
-            // To enforce CARD UP FRONT, 'default_incomplete' is the way.
-          },
-        },
         metadata: {
           userId: userId.toString(),
           planId: plan.id,
@@ -264,16 +340,10 @@ export class SubscriptionUseCases {
         },
       };
 
-      if (trialDays > 0) {
-        subscriptionConfig.trial_period_days = trialDays;
-      }
-
       const subscription =
         await this.stripeService.stripe.subscriptions.create(
           subscriptionConfig,
         );
-
-      console.log("✅ Subscription created:", subscription.id);
 
       console.log("✅ Subscription created:", subscription.id);
 
@@ -292,6 +362,7 @@ export class SubscriptionUseCases {
         subscriptionId: subscription.id,
         customerId: customer.id,
         ephemeralKey: ephemeralKey.secret,
+        requiresPaymentMethod: !!subscription.pending_setup_intent, // Flag for frontend
         description: description,
         message: "Subscription initiated successfully with trial",
       };
@@ -464,6 +535,19 @@ export class SubscriptionUseCases {
               periodEnd: currentPeriodEnd,
             },
           });
+
+          // Send Payment Accepted Email
+          const user = await this.userRepo.findById(
+            existingSubscription.userId,
+          );
+          if (user) {
+            await this.notificationService.sendPaymentAcceptedEmail(
+              user,
+              invoice.amount_paid / 100,
+              invoice.currency,
+              invoice.hosted_invoice_url,
+            );
+          }
         }
       } else {
         // Fallback or New Subscription for No-Trial plans:
@@ -491,23 +575,16 @@ export class SubscriptionUseCases {
           const sub = stripeSubscription;
 
           // STRICT CHECK: For trials, ensure a default payment method is set on the subscription
-          // or the customer has a default payment method.
+          let finalStatus = status;
           if (
             sub.status === "trialing" &&
             !sub.default_payment_method &&
-            !invoice.default_payment_method // Invoice might have it
-            // We should ideally check customer default too, but 'default_incomplete' usually sets it on subscription
+            !invoice.default_payment_method
           ) {
-            // Retrieve customer to check default source if strictly needed,
-            // but let's assume if we required 'save_default_payment_method: on_subscription', it should be there.
-
-            // Actually, if 'default_incomplete' is used, the subscription status stays 'incomplete' until a PM is added.
-            // If it moved to 'trialing', it usually means a PM was added.
-            // However, if the user says it activated without card, maybe Stripe allowed it for 0 amount?
-
-            // Let's log and maybe SKIP creation if we suspect no card.
-            console.log("Checking for payment method on trial subscription...");
-            // If we really want to enforce, we can check setup_intent status if available?
+            console.log(
+              "No payment method found for trial. Marking as INCOMPLETE locally.",
+            );
+            finalStatus = "INCOMPLETE";
           }
 
           // Get Plan details for Email and Transaction
@@ -522,21 +599,37 @@ export class SubscriptionUseCases {
             stripeCustomerId: invoice.customer,
             currentPeriodStart: currentPeriodStart,
             currentPeriodEnd: currentPeriodEnd,
-            status: status, // Can be ACTIVE or TRIALING
+            status: finalStatus, // Use the gated status
             cancelAtPeriodEnd: false,
           });
 
-          // Update user to premium
-          await this.userRepo.updateUserSubscriptionType(userId, "premium");
+          // Update user to premium ONLY if status is NOT INCOMPLETE
+          if (finalStatus !== "INCOMPLETE") {
+            await this.userRepo.updateUserSubscriptionType(userId, "premium");
+          } else {
+            // Ensure they stay on Free if incomplete
+            await this.userRepo.updateUserSubscriptionType(userId, "Free");
+          }
 
           // Fetch the newly created subscription to get its DB ID
           const newSub = await this.subscriptionRepo.findSubscriptionByStripeId(
             invoice.subscription,
           );
 
-          // Send Trial Email if status is TRIALING
-          if (status === "TRIALING" && plan && user) {
-            await this.sendTrialSubscriptionEmail(user, plan, currentPeriodEnd);
+          // Send Trial Email if status is TRIALING (and valid)
+          if (finalStatus === "TRIALING" && plan && user) {
+            await this.notificationService.sendTrialStartedEmail(
+              user,
+              plan,
+              currentPeriodEnd,
+            );
+          } else if (finalStatus === "ACTIVE" && plan && user) {
+            // Send Subscription Started Email (Non-Trial)
+            await this.notificationService.sendSubscriptionStartedEmail(
+              user,
+              plan,
+              currentPeriodEnd,
+            );
           }
 
           if (newSub) {
@@ -613,6 +706,18 @@ export class SubscriptionUseCases {
   async handleCheckoutSessionCompleted(session) {
     try {
       const { userId, planId, type } = session.metadata;
+
+      // Handle Trial Validation Charge (Charge & Refund flow)
+      if (type === "TRIAL_VALIDATION_CHARGE") {
+        await this.handleTrialValidationSuccess(session);
+        return;
+      }
+
+      // Handle Trial Setup Session
+      if (type === "SUBSCRIPTION_TRIAL_SETUP") {
+        await this.handleTrialSetupCompleted(session);
+        return;
+      }
 
       if (!userId || !planId || type !== "SUBSCRIPTION_PAYMENT") {
         console.warn("Invalid metadata in checkout session:", session.id);
@@ -744,7 +849,25 @@ export class SubscriptionUseCases {
 
   async handlePaymentIntentSucceeded(paymentIntent) {
     try {
-      console.log("Processing payment intent succeeded:", this.userRepo);
+      console.log("Processing payment intent succeeded:");
+
+      // Check for Trial Validation Charge
+      if (
+        paymentIntent.metadata &&
+        (paymentIntent.metadata.type === "TRIAL_VALIDATION_CHARGE" ||
+          paymentIntent.metadata.type === "APP_TRIAL_VALIDATION")
+      ) {
+        // Construct a mock "session" object since handleTrialValidationSuccess expects session-like structure with metadata
+        // and payment_intent property.
+        const mockSession = {
+          id: paymentIntent.id, // Use PI ID as session ID for logging/transaction update
+          metadata: paymentIntent.metadata,
+          payment_intent: paymentIntent.id,
+          customer: paymentIntent.customer,
+        };
+        await this.handleTrialValidationSuccess(mockSession);
+        return;
+      }
 
       const transaction =
         await this.subscriptionRepo.findTransactionByStripePaymentIntent(
@@ -1164,6 +1287,152 @@ export class SubscriptionUseCases {
       return result;
     } catch (error) {
       throw new Error(`Failed to get transactions: ${error.message}`);
+    }
+  }
+
+  async handleTrialValidationSuccess(session) {
+    try {
+      const {
+        userId,
+        planId,
+        trialDays,
+        planPrice,
+        planCurrency,
+        planName,
+        planInterval,
+        planIntervalCount,
+      } = session.metadata;
+
+      const paymentIntentId = session.payment_intent;
+
+      console.log(
+        `Processing Trial Validation for User ${userId}. PI: ${paymentIntentId}`,
+      );
+
+      // 1. REFUND THE VALIDATION CHARGE
+      try {
+        await this.stripeService.stripe.refunds.create({
+          payment_intent: paymentIntentId,
+          reason: "requested_by_customer", // or 'duplicate' or null. 'requested_by_customer' is fine or just leave default.
+          metadata: { reason: "Trial Validation Refund" },
+        });
+        console.log("✅ Validation check refunded.");
+      } catch (refundError) {
+        console.error(
+          "⚠️ Failed to refund validation charge:",
+          refundError.message,
+        );
+        // Continue to create subscription? Yes, don't block user access if refund fails (can be manual).
+      }
+
+      // 2. Retrieve Payment Intent to get Payment Method
+      const paymentIntent =
+        await this.stripeService.stripe.paymentIntents.retrieve(
+          paymentIntentId,
+        );
+      const paymentMethodId = paymentIntent.payment_method;
+
+      if (!paymentMethodId) {
+        throw new Error("No payment method found in PaymentIntent");
+      }
+
+      // 3. Create the Subscription with Trial
+      console.log(
+        `Creating trial subscription (${trialDays} days) for user ${userId} using PM ${paymentMethodId}`,
+      );
+
+      const customerId = session.customer;
+
+      const plan = await this.subscriptionRepo.findPlanById(planId);
+      if (!plan) throw new Error("Plan not found");
+
+      // FIX: Create product first, as subscriptions.create doesn't support product_data in price_data
+      const product = await this.stripeService.stripe.products.create({
+        name: planName,
+      });
+
+      const subscriptionConfig = {
+        customer: customerId,
+        default_payment_method: paymentMethodId,
+        trial_period_days: parseInt(trialDays),
+        items: [
+          {
+            price_data: {
+              currency: planCurrency.toLowerCase(),
+              product: product.id, // Use the created product ID
+              unit_amount: Math.round(parseFloat(planPrice) * 100),
+              recurring: {
+                interval: planInterval,
+                interval_count: parseInt(planIntervalCount),
+              },
+            },
+          },
+        ],
+        metadata: {
+          userId: userId,
+          planId: planId,
+          type: "APP_SUBSCRIPTION",
+        },
+      };
+
+      const subscription =
+        await this.stripeService.stripe.subscriptions.create(
+          subscriptionConfig,
+        );
+
+      console.log("✅ Trial Subscription created:", subscription.id);
+
+      // 4. Update DB
+      const currentPeriodStart = new Date(
+        subscription.current_period_start * 1000,
+      );
+      const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+
+      const newSub = await this.subscriptionRepo.createSubscription({
+        userId: userId,
+        planId: planId,
+        stripeSubscriptionId: subscription.id,
+        stripeCustomerId: customerId,
+        currentPeriodStart: currentPeriodStart,
+        currentPeriodEnd: currentPeriodEnd,
+        status: subscription.status.toUpperCase(),
+        cancelAtPeriodEnd: false,
+      });
+
+      // Update user to premium
+      await this.userRepo.updateUserSubscriptionType(userId, "premium");
+
+      // Send Email
+      const user = await this.userRepo.findById(userId);
+      await this.sendTrialSubscriptionEmail(user, plan, currentPeriodEnd);
+
+      // Update Transaction (The Validation Charge)
+      await this.subscriptionRepo.updateTransactionByCheckoutSession(
+        session.id,
+        {
+          status: "REFUNDED", // Since we refunded it
+          description: "Trial Validation Charge (Refunded)",
+          subscriptionId: newSub.id,
+          stripePaymentIntentId: paymentIntentId,
+          metadata: {
+            ...session.metadata,
+            subscriptionId: subscription.id,
+            refunded: true,
+          },
+        },
+      );
+    } catch (error) {
+      console.error("Error handling trial validation success:", error);
+      // FIX: Pass stripePaymentIntentId so repository can find the transaction
+      await this.subscriptionRepo.updateTransactionByCheckoutSession(
+        session.id,
+        {
+          status: "FAILED",
+          description: `Trial validation processing failed: ${error.message}`,
+          stripePaymentIntentId: session.payment_intent, // Required for lookup if session.id is a PI
+        },
+      );
+      throw error;
     }
   }
 }

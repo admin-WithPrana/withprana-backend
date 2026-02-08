@@ -5,14 +5,14 @@ export class UserController {
   constructor(
     userRepository,
     otpRepository,
-    mailer,
+    notificationService,
     loginHistoryRepository,
     subscriptionRepository,
   ) {
     this.userUseCases = new UserUseCases(
       userRepository,
       otpRepository,
-      mailer,
+      notificationService,
       loginHistoryRepository,
       subscriptionRepository,
     );

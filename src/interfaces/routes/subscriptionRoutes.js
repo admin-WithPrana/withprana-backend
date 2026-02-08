@@ -2,6 +2,7 @@ import { SubscriptionController } from "../controllers/subscriptionController.js
 import { SubscriptionUseCases } from "../../domain/usecases/subscriptionUseCases.js";
 import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
 import { StripeService } from "../../infrastructure/services/stripeService.js";
+import { NotificationService } from "../../infrastructure/services/notificationService.js";
 import Stripe from "stripe";
 import { registerProtectedRoute } from "../../infrastructure/services/registerProtectedRoute.js";
 
@@ -11,11 +12,12 @@ export const setupSubscriptionRoutes = (
 ) => {
   const subscriptionRepo = new SubscriptionRepository(prismaRepository.prisma);
   const stripeService = new StripeService();
+  const notificationService = new NotificationService();
   const subscriptionUseCases = new SubscriptionUseCases(
     subscriptionRepo,
     userRepository,
     stripeService,
-    mailer,
+    notificationService,
   );
   const subscriptionController = new SubscriptionController(
     subscriptionUseCases,

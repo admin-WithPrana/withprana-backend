@@ -13,13 +13,13 @@ export class UserUseCases {
   constructor(
     userRepo,
     otpRepository,
-    mailer,
+    notificationService, // Changed from mailer
     loginHistoryRepository,
     subscriptionRepo,
   ) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
-    this.mailer = mailer;
+    this.notificationService = notificationService; // Store notificationService
     this.loginHistoryRepository = loginHistoryRepository;
     this.subscriptionRepository = subscriptionRepo;
   }
@@ -176,6 +176,9 @@ export class UserUseCases {
       const refreshToken = this.generateRefreshToken();
       await this.storeRefreshToken(createdUser, refreshToken);
 
+      // Send Welcome Email
+      await this.notificationService.sendWelcomeEmail(createdUser);
+
       return {
         user: createdUser,
         token,
@@ -211,7 +214,7 @@ export class UserUseCases {
       }
 
       await this.otpRepository.createOTP(otp);
-      await this.sendOTPEmail(user.email, otpCode);
+      await this.notificationService.sendOtpEmail(user.email, otpCode);
       return {
         user: existingUser,
         oauth: false,
@@ -230,7 +233,7 @@ export class UserUseCases {
     createdUser = this._decryptUser(createdUser);
 
     await this.otpRepository.createOTP(otp);
-    await this.sendOTPEmail(user.email, otpCode);
+    await this.notificationService.sendOtpEmail(user.email, otpCode);
 
     return {
       user: createdUser,
@@ -270,7 +273,7 @@ export class UserUseCases {
     });
 
     await this.otpRepository.createOTP(otp);
-    await this.sendOTPEmail(user.email, otpCode);
+    await this.notificationService.sendOtpEmail(user.email, otpCode);
 
     return { success: true, message: "OTP resent successfully" };
   }
@@ -333,6 +336,11 @@ export class UserUseCases {
     const wasActive = verifiedUser.active;
     const isNewRegistration = !user.active;
 
+    // If it was a new registration (not active before), send welcome email
+    if (isNewRegistration) {
+      await this.notificationService.sendWelcomeEmail(verifiedUser);
+    }
+
     return {
       success: true,
       token,
@@ -386,7 +394,7 @@ export class UserUseCases {
       });
 
       await this.otpRepository.createOTP(otp);
-      await this.sendOTPEmail(email, otpCode); // use plain email
+      await this.notificationService.sendOtpEmail(email, otpCode);
 
       return {
         success: true,
@@ -451,17 +459,7 @@ export class UserUseCases {
     };
   }
 
-  async sendOTPEmail(email, otpCode) {
-    const mailOptions = {
-      from: '"Test App" <no-reply@yourapp.com>',
-      to: email,
-      subject: "OTP for verification",
-      text: `Your OTP is: ${otpCode}`,
-      html: `<p>Your OTP is: <strong>${otpCode}</strong></p>`,
-    };
-
-    await this.mailer.sendMail(mailOptions);
-  }
+  // async sendOTPEmail(email, otpCode) { ... } // Removed as it is now in NotificationService
 
   async getUsers(filters) {
     const users = await this.userRepository.findAll(filters);
@@ -508,8 +506,16 @@ export class UserUseCases {
     return this._decryptUser(user);
   }
   async deleteUser(id) {
-    const user = await this.userRepository.deleteUser(id);
-    return user;
+    const user = await this.userRepository.findById(id);
+    if (user) {
+      // Send email before deleting (or after, but if deleted we might lose data if not careful. passed user obj is fine)
+      await this.notificationService.sendAccountDeleteConfirmationEmail(
+        this._decryptUser(user).email,
+        this._decryptUser(user).name,
+      );
+    }
+    const deletedUser = await this.userRepository.deleteUser(id);
+    return deletedUser;
   }
 
   async refreshToken(incomingRefreshToken) {
