@@ -131,4 +131,34 @@ export class StripeService {
       throw new Error(`Failed to retrieve subscription: ${error.message}`);
     }
   }
+
+  async retrieveInvoice(invoiceId) {
+    try {
+      const invoice = await this.stripe.invoices.retrieve(invoiceId);
+      return invoice;
+    } catch (error) {
+      throw new Error(`Failed to retrieve invoice: ${error.message}`);
+    }
+  }
+
+  async retrievePaymentIntent(paymentIntentId) {
+    try {
+      const paymentIntent =
+        await this.stripe.paymentIntents.retrieve(paymentIntentId);
+      return paymentIntent;
+    } catch (error) {
+      throw new Error(`Failed to retrieve payment intent: ${error.message}`);
+    }
+  }
+
+  async refundPayment(paymentIntentId) {
+    try {
+      const refund = await this.stripe.refunds.create({
+        payment_intent: paymentIntentId,
+      });
+      return refund;
+    } catch (error) {
+      throw new Error(`Failed to refund payment: ${error.message}`);
+    }
+  }
 }

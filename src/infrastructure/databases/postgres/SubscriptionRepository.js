@@ -175,11 +175,6 @@ export class SubscriptionRepository {
     });
 
     if (!transaction) {
-      console.warn(
-        "Transaction not found for checkout session:",
-        checkoutSessionId,
-      );
-
       // Alternative: Try to find by payment intent if available in data
       if (data.stripePaymentIntentId) {
         console.log(
@@ -200,14 +195,13 @@ export class SubscriptionRepository {
             where: { id: transactionByPaymentIntent.id },
             data,
           });
-        } else {
-          console.log(
-            `[DEBUG] updateTransactionByCheckoutSession: Transaction NOT found by PaymentIntentID: ${data.stripePaymentIntentId}`,
-          );
-          // Dump recent transactions for this payment intent ID just in case of mismatch?
-          // Or maybe dump all transactions for reference? No, too many.
         }
       }
+
+      console.warn(
+        "Transaction not found for checkout session or payment intent:",
+        checkoutSessionId,
+      );
 
       throw new Error(
         "Transaction not found for checkout session: " + checkoutSessionId,
@@ -224,6 +218,19 @@ export class SubscriptionRepository {
     const result = await this.prisma.transaction.findFirst({
       where: {
         stripePaymentIntentId: stripePaymentIntentId,
+      },
+      include: {
+        user: true,
+        subscription: true,
+      },
+    });
+    return this._decryptTransaction(result);
+  }
+
+  async findTransactionByStripeInvoiceId(stripeInvoiceId) {
+    const result = await this.prisma.transaction.findFirst({
+      where: {
+        stripeInvoiceId: stripeInvoiceId,
       },
       include: {
         user: true,

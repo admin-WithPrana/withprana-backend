@@ -208,4 +208,66 @@ export class NotificationService {
     `;
     await this.sendEmail(email, subject, text, html);
   }
+
+  async sendSubscriptionCancelledEmail(user, planName, endDate) {
+    const endStr = new Date(endDate).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const subject = "Subscription Cancellation Scheduled - Being One Within";
+    const text = `Hello ${user.name || "there"},\n\nYour subscription to ${planName} has been cancelled as requested. You will continue to have access until the end of your billing period on ${endStr}. After this date, your account will revert to the Free plan.`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2>Subscription Cancellation Scheduled</h2>
+        <p>Hello <strong>${user.name || "there"}</strong>,</p>
+        <p>Your subscription to <strong>${planName}</strong> has been cancelled as requested.</p>
+        <p><strong>Good news:</strong> You will continue to have full access to all premium features until your current billing period ends on <strong>${endStr}</strong>.</p>
+        <p>After this date, your account will automatically revert to the Free plan, and you will not be charged again.</p>
+        <p>We're sorry to see you go! If you change your mind, you can resubscribe at any time.</p>
+        <br/>
+        <p>Best regards,<br>The Being One Within Team</p>
+      </div>
+    `;
+    await this.sendEmail(user.email, subject, text, html);
+  }
+
+  async sendTrialCancelledEmail(user, planName) {
+    const subject = "Trial Cancelled - Being One Within";
+    const text = `Hello ${user.name || "there"},\n\nYour free trial of ${planName} has been cancelled immediately as requested. Your account has been downgraded to the Free plan.`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2>Trial Cancelled</h2>
+        <p>Hello <strong>${user.name || "there"}</strong>,</p>
+        <p>Your free trial of <strong>${planName}</strong> has been cancelled immediately as requested.</p>
+        <p>Your account has been downgraded to the Free plan. You will not be charged.</p>
+        <p>We're sorry it didn't work out this time. You are welcome to subscribe again whenever you're ready.</p>
+        <br/>
+        <p>Best regards,<br>The Being One Within Team</p>
+      </div>
+    `;
+    await this.sendEmail(user.email, subject, text, html);
+  }
+
+  // --- 6. Admin Notifications ---
+  async sendAdminSubscriptionCancelledEmail(user, planName, cancelledAt) {
+    const adminEmail = process.env.ADMIN_EMAIL || "x2cvicious123@gmail.com";
+    const dateStr = new Date(cancelledAt).toLocaleString("en-US", {
+      timeZone: "Asia/Kolkata",
+    });
+
+    const subject = `⚠️ Subscription Cancelled: ${user.name || "User"} - ${planName}`;
+    const text = `Admin,\n\nA paid subscription has been cancelled.\n\nUser: ${user.name} (${user.email})\nPlan: ${planName}\nCancelled At: ${dateStr}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2>⚠️ Subscription Cancelled</h2>
+        <p><strong>User:</strong> ${user.name} (${user.email})</p>
+        <p><strong>Plan:</strong> ${planName}</p>
+        <p><strong>Cancelled At:</strong> ${dateStr}</p>
+        <br/>
+        <p>Please check the admin dashboard for more details.</p>
+      </div>
+    `;
+    await this.sendEmail(adminEmail, subject, text, html);
+  }
 }
