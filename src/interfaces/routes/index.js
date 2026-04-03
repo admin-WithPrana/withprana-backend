@@ -57,6 +57,7 @@ export async function registerRoutes(app, deps) {
             });
           },
         },
+        sseService: deps.sseService,
       });
     },
     { prefix: "/api/subscriptions" },

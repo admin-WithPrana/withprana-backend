@@ -8,7 +8,7 @@ import { registerProtectedRoute } from "../../infrastructure/services/registerPr
 
 export const setupSubscriptionRoutes = (
   app,
-  { prismaRepository, userRepository, mailer },
+  { prismaRepository, userRepository, mailer, sseService },
 ) => {
   const subscriptionRepo = new SubscriptionRepository(prismaRepository.prisma);
   const stripeService = new StripeService();
@@ -18,9 +18,11 @@ export const setupSubscriptionRoutes = (
     userRepository,
     stripeService,
     notificationService,
+    sseService,
   );
   const subscriptionController = new SubscriptionController(
     subscriptionUseCases,
+    sseService,
   );
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -124,6 +126,9 @@ export const setupSubscriptionRoutes = (
     app,
     "",
     async (protectedApp) => {
+      protectedApp.get("/sse/subscribe", (req, res) =>
+        subscriptionController.subscribeSSE(req, res),
+      );
       protectedApp.get("/plans", (req, res) =>
         subscriptionController.getPlans(req, res),
       );

@@ -14,6 +14,7 @@ import {
 } from "./config/bullmq.js";
 import { StripeService } from "./infrastructure/services/stripeService.js";
 import { NotificationService } from "./infrastructure/services/notificationService.js";
+import { SSEService } from "./infrastructure/services/sseService.js";
 import { uploadToS3 } from "./infrastructure/services/uploadToS3.js";
 import { initializeSubscriptionCron } from "./infrastructure/jobs/subscriptionCron.js";
 
@@ -63,6 +64,7 @@ const startServer = async () => {
   // Services
   const stripeService = new StripeService();
   const notificationService = new NotificationService();
+  const sseService = new SSEService();
 
   await registerRoutes(app, {
     prismaRepository,
@@ -74,6 +76,7 @@ const startServer = async () => {
     uploadToS3,
     notificationService,
     stripeService,
+    sseService,
   });
 
   try {
