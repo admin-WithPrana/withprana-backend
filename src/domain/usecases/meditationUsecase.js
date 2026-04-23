@@ -1,3 +1,5 @@
+import { pushQueue } from "../../config/bullmq.js";
+
 export class MeditationUsecase {
   constructor(
     meditationRepository,
@@ -49,6 +51,14 @@ export class MeditationUsecase {
           removeOnFail: false,
         },
       );
+    } else if (meditation.active) {
+      // Immediate release: Dispatch broadcast Push Notification
+      await pushQueue.add("newMeditationPush", {
+        title: "New Meditation Released!",
+        message: `"${meditation.title}" is now available to listen to.`,
+        imageUrl: meditation.thumbnail,
+        sendToAllSubscribed: false // Dispatch scalable chunked customer database notifications via bull worker
+      });
     }
 
     return meditation;

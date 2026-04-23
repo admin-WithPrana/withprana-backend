@@ -20,6 +20,7 @@ import { otpRoutes } from "./otpRoutes.js";
 import { supportRoutes } from "./supportRoutes.js";
 import { notificationPreferencesRoutes } from "./notificationPreferencesRoutes.js";
 import { downloadedMeditationRoutes } from "./downloadedMeditationRoutes.js";
+import { notificationRoutes } from "./notificationRoutes.js";
 
 export async function registerRoutes(app, deps) {
   // ------------------------ PUBLIC ROUTES ------------------------
@@ -161,6 +162,10 @@ export async function registerRoutes(app, deps) {
   );
 
   registerProtectedRoute(app, "/api/downloads", downloadedMeditationRoutes, {
+    prismaRepository: deps.prismaRepository,
+  });
+
+  registerProtectedRoute(app, "/api/inbox", notificationRoutes, {
     prismaRepository: deps.prismaRepository,
   });
 }
