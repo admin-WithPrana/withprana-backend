@@ -34,7 +34,7 @@ export class SubscriptionRepository {
   async createSubscription(data) {
     const subscription = await this.prisma.subscription.create({
       data: {
-        userId: BigInt(data.userId),
+        userId: data.userId,
         planId: data.planId,
         stripeSubscriptionId: data.stripeSubscriptionId || null,
         stripeCustomerId: data.stripeCustomerId || null,
@@ -89,13 +89,22 @@ export class SubscriptionRepository {
     return result;
   }
 
+  async deleteSubscription(where) {
+    try {
+      return await this.prisma.subscription.deleteMany({
+        where,
+      });
+    } catch (error) {
+      console.error("Error deleting subscription:", error);
+      throw error;
+    }
+  }
+
   async findActiveSubscriptionByUserId(userId) {
-    // This doesn't return user details, just subscription + plan.
-    // But good to check if it does in future.
     return await this.prisma.subscription.findFirst({
       where: {
-        userId: BigInt(userId),
-        status: "ACTIVE",
+        userId: userId,
+        status: { in: ["ACTIVE", "TRIALING"] },
         currentPeriodEnd: {
           gt: new Date(),
         },
@@ -107,12 +116,9 @@ export class SubscriptionRepository {
   }
 
   async createTransaction(data) {
-    // FIXED: Removed the console.log that was preventing transaction creation
-    console.log("Creating transaction:", data);
-
     const result = await this.prisma.transaction.create({
       data: {
-        userId: BigInt(data.userId),
+        userId: data.userId,
         subscriptionId: data.subscriptionId || null,
         planId: data.planId || null,
         amount: data.amount,
@@ -169,13 +175,11 @@ export class SubscriptionRepository {
     });
 
     if (!transaction) {
-      console.warn(
-        "Transaction not found for checkout session:",
-        checkoutSessionId
-      );
-
       // Alternative: Try to find by payment intent if available in data
       if (data.stripePaymentIntentId) {
+        console.log(
+          `[DEBUG] updateTransactionByCheckoutSession: Attempting lookup by stripePaymentIntentId: ${data.stripePaymentIntentId}`,
+        );
         const transactionByPaymentIntent =
           await this.prisma.transaction.findFirst({
             where: {
@@ -184,6 +188,9 @@ export class SubscriptionRepository {
           });
 
         if (transactionByPaymentIntent) {
+          console.log(
+            `[DEBUG] updateTransactionByCheckoutSession: Found transaction ${transactionByPaymentIntent.id} by PaymentIntentID`,
+          );
           return await this.prisma.transaction.update({
             where: { id: transactionByPaymentIntent.id },
             data,
@@ -191,8 +198,13 @@ export class SubscriptionRepository {
         }
       }
 
+      console.warn(
+        "Transaction not found for checkout session or payment intent:",
+        checkoutSessionId,
+      );
+
       throw new Error(
-        "Transaction not found for checkout session: " + checkoutSessionId
+        "Transaction not found for checkout session: " + checkoutSessionId,
       );
     }
 
@@ -206,6 +218,19 @@ export class SubscriptionRepository {
     const result = await this.prisma.transaction.findFirst({
       where: {
         stripePaymentIntentId: stripePaymentIntentId,
+      },
+      include: {
+        user: true,
+        subscription: true,
+      },
+    });
+    return this._decryptTransaction(result);
+  }
+
+  async findTransactionByStripeInvoiceId(stripeInvoiceId) {
+    const result = await this.prisma.transaction.findFirst({
+      where: {
+        stripeInvoiceId: stripeInvoiceId,
       },
       include: {
         user: true,
@@ -231,7 +256,7 @@ export class SubscriptionRepository {
     const skip = (page - 1) * limit;
 
     const where = {
-      userId: BigInt(userId),
+      userId: userId,
       ...(status && { status }),
       ...(type && { type }),
     };
@@ -268,11 +293,11 @@ export class SubscriptionRepository {
 
   async getUserWithSubscription(userId) {
     const user = await this.prisma.user.findUnique({
-      where: { id: BigInt(userId) },
+      where: { id: userId },
       include: {
         subscriptions: {
           where: {
-            status: "ACTIVE",
+            status: { in: ["ACTIVE", "TRIALING"] },
             currentPeriodEnd: {
               gt: new Date(),
             },
@@ -340,7 +365,7 @@ export class SubscriptionRepository {
 
     const where = {
       ...(status && { status }),
-      ...(userId && { userId: BigInt(userId) }),
+      ...(userId && { userId: userId }),
       ...(planId && { planId }),
     };
 
@@ -423,6 +448,14 @@ export class SubscriptionRepository {
     return subscription;
   }
 
+  async findSubscriptionByStripeId(stripeSubscriptionId) {
+    if (!stripeSubscriptionId) return null;
+    return await this.prisma.subscription.findUnique({
+      where: { stripeSubscriptionId },
+      include: { plan: true },
+    });
+  }
+
   async getAdminTransactions(filters = {}) {
     const {
       page = 1,
@@ -438,7 +471,7 @@ export class SubscriptionRepository {
     const where = {
       ...(status && { status }),
       ...(type && { type }),
-      ...(userId && { userId: BigInt(userId) }),
+      ...(userId && { userId: userId }),
       ...(subscriptionId && { subscriptionId }),
     };
 
@@ -479,7 +512,7 @@ export class SubscriptionRepository {
 
   async updateUserStripeCustomerId(userId, stripeCustomerId) {
     return await this.prisma.user.update({
-      where: { id: BigInt(userId) },
+      where: { id: userId },
       data: { stripeCustomerId },
     });
   }
@@ -494,7 +527,7 @@ export class SubscriptionRepository {
   async getSubscriptionByUserId(userId) {
     return await this.prisma.subscription.findFirst({
       where: {
-        userId: BigInt(userId),
+        userId: userId,
       },
       include: {
         plan: true,
@@ -507,8 +540,8 @@ export class SubscriptionRepository {
     try {
       const activeSubscription = await this.prisma.subscription.findFirst({
         where: {
-          userId: BigInt(userId),
-          status: "ACTIVE",
+          userId: userId,
+          status: { in: ["ACTIVE", "TRIALING"] },
           currentPeriodEnd: {
             gt: new Date(), // not expired
           },

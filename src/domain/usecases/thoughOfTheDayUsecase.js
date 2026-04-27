@@ -3,7 +3,7 @@
 export class ThoughtOfTheDayUsecase {
   constructor(thoughtRepository, postQueue) {
     this.thoughtRepository = thoughtRepository;
-    this.postQueue=postQueue
+    this.postQueue = postQueue
   }
 
   // Create a new thought
@@ -40,15 +40,15 @@ export class ThoughtOfTheDayUsecase {
 
       if (status === 'PENDING') {
         await this.postQueue.add(
-      'thoughtOfTheDayQueue',
-      { thoughtId: thought.id },
-      {
-        delay: new Date(thought.scheduledAt).getTime() - Date.now(),
-        attempts: 3, // retry if job fails
-        removeOnComplete: true,
-        removeOnFail: false
-      }
-    );
+          'thoughtOfTheDayQueue',
+          { thoughtId: thought.id },
+          {
+            delay: new Date(thought.scheduledAt).getTime() - Date.now(),
+            attempts: 3, // retry if job fails
+            removeOnComplete: true,
+            removeOnFail: false
+          }
+        );
       }
 
       return thought;
@@ -110,9 +110,9 @@ export class ThoughtOfTheDayUsecase {
   }
 
   // Get thoughts by filter
-  async getThoughts({ status = null, limit = null, skip = null,sort,order }) {
+  async getThoughts({ status = null, limit = null, skip = null, sort, order }) {
     try {
-      return await this.thoughtRepository.findAll({ status, limit, skip,sort,order });
+      return await this.thoughtRepository.findAll({ status, limit, skip, sort, order });
     } catch (error) {
       throw new Error(error.message);
     }
@@ -125,6 +125,14 @@ export class ThoughtOfTheDayUsecase {
       return await this.thoughtRepository.getUpcomingThoughts(now);
     } catch (error) {
       throw new Error(error.message);
+    }
+  }
+
+  async getTodayThought() {
+    try {
+      return await this.thoughtRepository.findReleasedUntilNow()
+    } catch (error) {
+      throw new Error(error.message)
     }
   }
 }

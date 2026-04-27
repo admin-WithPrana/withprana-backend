@@ -1,7 +1,13 @@
 import { UserController } from "../controllers/userController.js";
 import { PostgresOTPRepository } from "../../infrastructure/databases/postgres/otpRepository.js";
 import { PrismaUserRepository } from "../../infrastructure/databases/postgres/userRepository.js";
+import { NotificationService } from "../../infrastructure/services/notificationService.js";
 import fastifyMultipart from "@fastify/multipart";
+import { LoginHistoryRepository } from "../../infrastructure/databases/postgres/loginHistoryRepository.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
+import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
+
+import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
 
 export const setupRoutes = (app, { prismaRepository, mailer }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
@@ -10,8 +16,19 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
 
   const otpRepo = new PostgresOTPRepository(prismaRepository.prisma);
   const userRepo = new PrismaUserRepository(prismaRepository.prisma);
+  const loginHistoryRepository = new LoginHistoryRepository(
+    prismaRepository.prisma,
+  );
+  const subscriptionRepo = new SubscriptionRepository(prismaRepository.prisma);
+  const notificationService = new NotificationService();
 
-  const userController = new UserController(userRepo, otpRepo, mailer);
+  const userController = new UserController(
+    userRepo,
+    otpRepo,
+    notificationService,
+    loginHistoryRepository,
+    subscriptionRepo,
+  );
 
   app.register(fastifyMultipart, {
     limits: {
@@ -24,7 +41,6 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post("/register", async (request, reply) => {
     try {
       const { name, email, profilePicture, oauth, method } = request.body;
-
       let profilePictureUrl = null;
 
       if (
@@ -36,7 +52,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
       }
 
       if (profilePicture?.file) {
-        let image = uploadToS3(profilePicture, "images");
+        let image = await uploadToS3(profilePicture, "images");
         profilePictureUrl = image[0];
       }
 
@@ -46,6 +62,12 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
         oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
         method: method && typeof method === "object" ? method.value : method,
         image: profilePictureUrl,
+        device:
+          request.body.device &&
+          typeof request.body.device === "object" &&
+          request.body.device.value
+            ? request.body.device.value
+            : request.body.device,
       };
 
       await userController.register({ ...request, body: payload }, reply);
@@ -59,58 +81,72 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   });
 
   app.post("/verify", (request, reply) =>
-    userController.verify(request, reply)
+    userController.verify(request, reply),
   );
   app.post("/resend-otp", (request, reply) =>
-    userController.resendOTP(request, reply)
+    userController.resendOTP(request, reply),
+  );
+  app.post("/check-email", (request, reply) =>
+    userController.checkEmail(request, reply),
   );
   app.post("/login", (request, reply) => userController.login(request, reply));
-
-  app.get("/:id", (request, reply) =>
-    userController.getUserById(request, reply)
+  app.post("/logout", { preHandler: authMiddleware }, (request, reply) =>
+    userController.logout(request, reply),
   );
 
-  app.patch("/:id", async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const { name, profilePicture } = request.body;
+  app.post("/refresh-token", (request, reply) =>
+    userController.refresh(request, reply),
+  );
 
-      let profilePictureUrl = undefined;
+  app.get("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.getUserById(request, reply),
+  );
 
-      if (profilePicture) {
-        if (profilePicture?.file) {
-          let image = uploadToS3(profilePicture, "images");
-          profilePictureUrl = image[0];
-        } else if (
-          typeof profilePicture === "string" &&
-          profilePicture.trim() !== ""
-        ) {
-          profilePictureUrl = profilePicture;
+  app.patch(
+    "/:id",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const { name, profilePicture } = request.body;
+
+        let profilePictureUrl = undefined;
+
+        if (profilePicture) {
+          if (profilePicture?.file) {
+            let image = await uploadToS3(profilePicture, "images");
+            profilePictureUrl = image[0];
+          } else if (
+            typeof profilePicture === "string" &&
+            profilePicture.trim() !== ""
+          ) {
+            profilePictureUrl = profilePicture;
+          }
         }
+
+        const payload = {
+          name: typeof name === "object" ? name.value : name,
+        };
+
+        if (profilePictureUrl !== "") {
+          payload.image = profilePictureUrl;
+        }
+
+        await userController.updateUser(
+          { ...request, params: { id }, body: payload, user: request.user },
+          reply,
+        );
+      } catch (error) {
+        console.error("User update error:", error);
+        reply.status(500).send({
+          error: "Failed to update user",
+          details: error.message,
+        });
       }
+    },
+  );
 
-      const payload = {
-        name: typeof name === "object" ? name.value : name,
-      };
-
-      if (profilePictureUrl !== "") {
-        payload.image = profilePictureUrl;
-      }
-
-      await userController.updateUser(
-        { ...request, params: { id }, body: payload },
-        reply
-      );
-    } catch (error) {
-      console.error("User update error:", error);
-      reply.status(500).send({
-        error: "Failed to update user",
-        details: error.message,
-      });
-    }
-  });
-
-  app.delete("/:id", (request, reply) =>
-    userController.deleteUser(request, reply)
+  app.delete("/:id", { preHandler: [authMiddleware] }, (request, reply) =>
+    userController.deleteUser(request, reply),
   );
 };

@@ -1,5 +1,7 @@
 import { User, OTP } from "../entities/user.js";
 import jwt from "jsonwebtoken";
+import crypto from "crypto"; // For random token generation
+import { hashToken } from "../../utils/tokenUtils.js";
 import {
   encrypt,
   decrypt,
@@ -8,13 +10,34 @@ import {
 } from "../../utils/encryption.js";
 
 export class UserUseCases {
-  constructor(userRepo, otpRepository, mailer) {
+  constructor(
+    userRepo,
+    otpRepository,
+    notificationService, // Changed from mailer
+    loginHistoryRepository,
+    subscriptionRepo,
+  ) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
-    this.mailer = mailer;
+    this.notificationService = notificationService; // Store notificationService
+    this.loginHistoryRepository = loginHistoryRepository;
+    this.subscriptionRepository = subscriptionRepo;
   }
 
-  subscriptionType = ["free", "premium", "enterprise"];
+  generateRefreshToken() {
+    return crypto.randomBytes(40).toString("hex");
+  }
+
+  async storeRefreshToken(user, refreshToken) {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await this.userRepository.createRefreshToken({
+      token: hashToken(refreshToken),
+      userId: user.id,
+      expiresAt,
+    });
+  }
+
+  subscriptionType = ["Free", "Premium"];
 
   signupSelector(type) {
     let subType = "email";
@@ -38,24 +61,30 @@ export class UserUseCases {
   }
 
   async registerUser(userData, device, ip) {
+    console.log("DEBUG: registerUser started for email:", userData.email);
     const user = new User({
-      email: userData.email,
+      email: userData.email.toLowerCase(),
       name: userData.name,
       image: userData.image,
       oauth: userData.oauth,
       signupMethod: this.signupSelector(Number(userData.method)),
-      subscriptionType: "free",
+      subscriptionType: "Free",
     });
 
     user.validate();
 
-    // Check using deterministic encrypted email
     const encryptedEmail = encryptDeterministic(user.email);
     let existingUser = await this.userRepository.findByEmail(encryptedEmail);
     if (existingUser) existingUser = this._decryptUser(existingUser);
 
+    // New Logic: If isLogin is true (Sign In), strict check for existing user.
+    if (userData.oauth && userData.isLogin === true && !existingUser) {
+      throw new Error("User not found. Please sign up.");
+    }
+
     if (existingUser) {
       if (
+        userData.oauth &&
         JSON.parse(userData.oauth) &&
         existingUser.signupMethod === "email" &&
         existingUser.active !== true
@@ -63,45 +92,65 @@ export class UserUseCases {
         throw new Error("This email is already registered. Please login");
       }
       if (
-        !JSON.parse(userData.oauth) &&
+        (!userData.oauth || !JSON.parse(userData.oauth)) &&
         existingUser.signupMethod !== "email" &&
         existingUser.active !== true
       ) {
         throw new Error(
-          "This email is already registered with OAuth. Please login with OAuth."
+          "This email is already registered with OAuth. Please login with OAuth.",
         );
       }
     }
 
-    if (JSON.parse(userData.oauth) == true) {
+    if (userData.oauth && JSON.parse(userData.oauth) == true) {
       if (existingUser) {
         if (existingUser.active === false) {
-          throw new Error("Login blocked by admin");
+          if (existingUser.systemDeactivated) {
+            await this.userRepository.reactivateUser(existingUser.id);
+          } else {
+            throw new Error("Login blocked by admin");
+          }
         }
 
-        // Encrypt name before updating
         const updateData = {
-          name: userData.name ? userData.name : undefined,
-          image: userData.image,
           signupMethod: this.signupSelector(Number(userData.method)),
         };
-        // Remove undefined keys
+
+        if (!existingUser.active) {
+          updateData.name = userData.name ? userData.name : undefined;
+          updateData.image = userData.image;
+        }
         Object.keys(updateData).forEach(
-          (key) => updateData[key] === undefined && delete updateData[key]
+          (key) => updateData[key] === undefined && delete updateData[key],
         );
 
         let updatedUser = await this.userRepository.update(
           existingUser.id,
-          updateData
+          updateData,
         );
         updatedUser = this._decryptUser(updatedUser);
+        console.log(
+          "DEBUG: About to call updateLastLogin with id:",
+          updatedUser.id,
+        );
+        await this.userRepository.updateLastLogin(updatedUser.id);
+        console.log("DEBUG: updateLastLogin completed");
 
-        const { token, loginHistory } = this.generateToken(updatedUser, device, ip);
+        const { token, loginHistory } = await this.generateToken(
+          updatedUser,
+          device,
+          ip,
+        );
+        const refreshToken = this.generateRefreshToken();
+        await this.storeRefreshToken(updatedUser, refreshToken);
+
         return {
           user: updatedUser,
-          token,
           loginHistory,
+          token,
+          refreshToken,
           oauth: true,
+          register: false,
           message: "Login successful",
         };
       }
@@ -117,22 +166,33 @@ export class UserUseCases {
 
       let createdUser = await this.userRepository.createUser(userToSave);
       createdUser = this._decryptUser(createdUser);
+      await this.userRepository.updateLastLogin(createdUser.id);
 
-      const token = this.generateToken(createdUser, device, ip);
+      const { token, loginHistory } = await this.generateToken(
+        createdUser,
+        device,
+        ip,
+      );
+      const refreshToken = this.generateRefreshToken();
+      await this.storeRefreshToken(createdUser, refreshToken);
+
+      // Send Welcome Email
+      await this.notificationService.sendWelcomeEmail(createdUser);
 
       return {
         user: createdUser,
         token,
+        loginHistory,
+        refreshToken,
         oauth: true,
+        register: true,
         message: "Registration successful",
       };
     }
 
-    // Non-OAuth flow
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    // Store OTP with encrypted email
     const otp = new OTP({
       email: encryptedEmail,
       otpcode: otpCode,
@@ -141,16 +201,24 @@ export class UserUseCases {
     });
 
     if (existingUser) {
+      if (existingUser.active === true) {
+        throw new Error("This email is already registered. Please login");
+      }
+
       if (existingUser.active === false) {
-        throw new Error("Login blocked by admin");
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          throw new Error("Login blocked by admin");
+        }
       }
 
       await this.otpRepository.createOTP(otp);
-      // Send email to plain email
-      await this.sendOTPEmail(user.email, otpCode);
+      await this.notificationService.sendOtpEmail(user.email, otpCode);
       return {
         user: existingUser,
         oauth: false,
+        register: false,
         message: "OTP sent for verification",
       };
     }
@@ -165,11 +233,12 @@ export class UserUseCases {
     createdUser = this._decryptUser(createdUser);
 
     await this.otpRepository.createOTP(otp);
-    await this.sendOTPEmail(user.email, otpCode);
+    await this.notificationService.sendOtpEmail(user.email, otpCode);
 
     return {
       user: createdUser,
       oauth: false,
+      register: true,
       message: "OTP sent for verification",
     };
   }
@@ -183,7 +252,13 @@ export class UserUseCases {
       throw new Error("User not found");
     }
 
-    if (JSON.parse(user.oauth) === true) {
+    // Safe check for oauth status
+    const isOauth =
+      user.oauth && typeof user.oauth === "string"
+        ? JSON.parse(user.oauth)
+        : user.oauth === true || user.oauth === "true"; // Handle boolean or string true
+
+    if (isOauth === true) {
       throw new Error("OAuth users do not require OTP verification");
     }
 
@@ -198,12 +273,12 @@ export class UserUseCases {
     });
 
     await this.otpRepository.createOTP(otp);
-    await this.sendOTPEmail(user.email, otpCode);
+    await this.notificationService.sendOtpEmail(user.email, otpCode);
 
     return { success: true, message: "OTP resent successfully" };
   }
 
-  async verifyUser(email, otpCode) {
+  async verifyUser(email, otpCode, device, ip) {
     const encryptedEmail = encryptDeterministic(email);
     let user = await this.userRepository.findByEmail(encryptedEmail);
     if (user) user = this._decryptUser(user);
@@ -213,11 +288,21 @@ export class UserUseCases {
     }
 
     if (user.oauth === true) {
-      const token = this.generateToken(user);
+      const { token, loginHistory } = await this.generateToken(
+        user,
+        device,
+        ip,
+      );
+      const refreshToken = this.generateRefreshToken();
+      await this.storeRefreshToken(user, refreshToken);
+
       return {
         success: true,
         token,
+        loginHistory,
+        refreshToken,
         oauth: true,
+        register: false,
         message: "OAuth user verified successfully",
       };
     }
@@ -237,15 +322,40 @@ export class UserUseCases {
     verifiedUser = this._decryptUser(verifiedUser);
 
     await this.otpRepository.updateOTP(encryptedEmail, false);
+    await this.userRepository.updateLastLogin(verifiedUser.id);
 
-    const token = this.generateToken(verifiedUser);
+    const { token, loginHistory } = await this.generateToken(
+      verifiedUser,
+      device,
+      ip,
+    );
+
+    const refreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(verifiedUser, refreshToken);
+
+    const wasActive = verifiedUser.active;
+    const isNewRegistration = !user.active;
+
+    // If it was a new registration (not active before), send welcome email
+    if (isNewRegistration) {
+      await this.notificationService.sendWelcomeEmail(verifiedUser);
+    }
 
     return {
       success: true,
       token,
+      loginHistory,
+      refreshToken,
       oauth: false,
+      register: isNewRegistration,
       message: "OTP verified successfully",
     };
+  }
+
+  async checkEmailExists(email) {
+    const encryptedEmail = encryptDeterministic(email.toLowerCase());
+    const user = await this.userRepository.findByEmail(encryptedEmail);
+    return !!user;
   }
 
   async login(email, oauth) {
@@ -259,7 +369,11 @@ export class UserUseCases {
       }
 
       if (existingUser.active === false) {
-        return { success: false, message: "Login blocked by admin" };
+        if (existingUser.systemDeactivated) {
+          await this.userRepository.reactivateUser(existingUser.id);
+        } else {
+          return { success: false, message: "Login blocked by admin" };
+        }
       }
 
       if (["google", "apple"].includes(existingUser.signupMethod)) {
@@ -280,7 +394,7 @@ export class UserUseCases {
       });
 
       await this.otpRepository.createOTP(otp);
-      await this.sendOTPEmail(email, otpCode); // use plain email
+      await this.notificationService.sendOtpEmail(email, otpCode);
 
       return {
         success: true,
@@ -297,10 +411,33 @@ export class UserUseCases {
     const loginHistory = await this.loginHistoryRepository.create({
       userId: user.id,
       role: "USER",
-      ipAddress: ip,
+      ipAddress: ip || "",
       device: device || null,
-      isActive: true
+      isActive: true,
     });
+
+    let isSubscribed = false;
+    let subscriptionType = "Free";
+
+    if (this.subscriptionRepository) {
+      try {
+        const subStatus = await this.subscriptionRepository.isUserSubscribed(
+          user.id,
+        );
+        if (subStatus.isSubscribed) {
+          isSubscribed = true;
+          subscriptionType = "Premium"; // Or fetch from plan name: subStatus.subscription.plan.name
+          if (subStatus.subscription?.plan?.name) {
+            subscriptionType = subStatus.subscription.plan.name;
+          }
+        }
+      } catch (err) {
+        console.error(
+          "Error checking subscription status during token generation:",
+          err,
+        );
+      }
+    }
 
     const token = jwt.sign(
       {
@@ -308,30 +445,21 @@ export class UserUseCases {
         email: encryptDeterministic(user.email),
         name: user.name ? encrypt(user.name) : undefined,
         role: "USER",
-        sessionId: loginHistory.id
+        sessionId: loginHistory.id,
+        isSubscribed: isSubscribed,
+        subscriptionType: subscriptionType,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "1d" },
     );
 
     return {
       token,
-      loginHistory
+      loginHistory,
     };
   }
 
-
-  async sendOTPEmail(email, otpCode) {
-    const mailOptions = {
-      from: '"Test App" <no-reply@yourapp.com>',
-      to: email,
-      subject: "OTP for verification",
-      text: `Your OTP is: ${otpCode}`,
-      html: `<p>Your OTP is: <strong>${otpCode}</strong></p>`,
-    };
-
-    await this.mailer.sendMail(mailOptions);
-  }
+  // async sendOTPEmail(email, otpCode) { ... } // Removed as it is now in NotificationService
 
   async getUsers(filters) {
     const users = await this.userRepository.findAll(filters);
@@ -342,9 +470,40 @@ export class UserUseCases {
     return users;
   }
 
+  async logoutUser(userId) {
+    const loginHistory =
+      await this.loginHistoryRepository.logoutLastForUser(userId);
+
+    if (!loginHistory) {
+      return null;
+    }
+
+    return loginHistory;
+  }
+
   async getUserById(id) {
     const user = await this.userRepository.findById(id);
-    return this._decryptUser(user);
+    const decryptedUser = this._decryptUser(user);
+
+    if (decryptedUser && this.subscriptionRepository) {
+      try {
+        const subStatus = await this.subscriptionRepository.isUserSubscribed(
+          decryptedUser.id,
+        );
+        decryptedUser.isSubscribed = subStatus.isSubscribed;
+      } catch (error) {
+        console.error(
+          "Error fetching subscription status for user:",
+          id,
+          error,
+        );
+        decryptedUser.isSubscribed = false;
+      }
+    } else if (decryptedUser) {
+      decryptedUser.isSubscribed = false;
+    }
+
+    return decryptedUser;
   }
 
   async deactivateUser(id) {
@@ -367,7 +526,50 @@ export class UserUseCases {
     return this._decryptUser(user);
   }
   async deleteUser(id) {
-    const user = await this.userRepository.deleteUser(id);
-    return user;
+    const user = await this.userRepository.findById(id);
+    if (user) {
+      // Send email before deleting (or after, but if deleted we might lose data if not careful. passed user obj is fine)
+      await this.notificationService.sendAccountDeleteConfirmationEmail(
+        this._decryptUser(user).email,
+        this._decryptUser(user).name,
+      );
+    }
+    const deletedUser = await this.userRepository.deleteUser(id);
+    return deletedUser;
+  }
+
+  async refreshToken(incomingRefreshToken) {
+    if (!incomingRefreshToken) {
+      throw new Error("Refresh Token missing");
+    }
+
+    const hashedIncoming = hashToken(incomingRefreshToken);
+    const existingToken =
+      await this.userRepository.findRefreshToken(hashedIncoming);
+
+    if (!existingToken) {
+      throw new Error("Invalid Refresh Token");
+    }
+
+    if (existingToken.revoked || new Date() > existingToken.expiresAt) {
+      throw new Error("Refresh Token invalid or expired");
+    }
+
+    const user = await this.userRepository.findById(existingToken.userId);
+    if (!user) throw new Error("User not found");
+    const decryptedUser = this._decryptUser(user);
+
+    await this.userRepository.revokeRefreshToken(existingToken.id);
+
+    const newAccessToken = this.generateToken(decryptedUser);
+    const newRefreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(decryptedUser, newRefreshToken);
+
+    return {
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: decryptedUser,
+      success: true,
+    };
   }
 }
