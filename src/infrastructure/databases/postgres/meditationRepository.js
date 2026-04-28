@@ -60,14 +60,14 @@ export class MeditationRepository {
         }),
         ...(data.tags &&
           data.tags.length > 0 && {
-            meditationTags: {
-              create: data.tags.map((tagId) => ({
-                tag: {
-                  connect: { id: tagId },
-                },
-              })),
-            },
-          }),
+          meditationTags: {
+            create: data.tags.map((tagId) => ({
+              tag: {
+                connect: { id: tagId },
+              },
+            })),
+          },
+        }),
       },
       include: {
         category: true,
@@ -208,7 +208,7 @@ export class MeditationRepository {
     console.log(data);
     if (data.categoryId !== undefined) {
       updateData.category = {
-        connect: { id: Number(data.categoryId) },
+        connect: { id: data.categoryId },
       };
       delete updateData.categoryId;
     }

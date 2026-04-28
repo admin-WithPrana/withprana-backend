@@ -123,10 +123,14 @@ export const meditationRoutes = async (
         title: typeof title === "object" ? title.value : title,
         description:
           typeof description === "object" ? description.value : description,
-        duration:
-          typeof duration === "object"
-            ? parseInt(duration.value)
-            : parseInt(duration),
+        duration: (() => {
+          const raw = typeof duration === "object" ? duration.value : duration;
+          if (typeof raw === 'string' && raw.includes(':')) {
+            const [mins, secs] = raw.split(':').map(Number);
+            return (mins * 60) + (secs || 0);
+          }
+          return parseInt(raw);
+        })(),
         categoryId:
           typeof categoryId === "object" ? categoryId.value : categoryId,
         link: audioFileUrl,
@@ -210,10 +214,14 @@ export const meditationRoutes = async (
             typeof description === "object" ? description.value : description,
         }),
         ...(duration !== undefined && {
-          duration:
-            typeof duration === "object"
-              ? parseInt(duration.value)
-              : parseInt(duration),
+          duration: (() => {
+            const raw = typeof duration === "object" ? duration.value : duration;
+            if (typeof raw === 'string' && raw.includes(':')) {
+              const [mins, secs] = raw.split(':').map(Number);
+              return (mins * 60) + (secs || 0);
+            }
+            return parseInt(raw);
+          })(),
         }),
         ...(categoryId !== undefined && {
           categoryId:

@@ -114,7 +114,7 @@ export async function registerRoutes(app, deps) {
 
   registerProtectedRoute(app, "/api/thought", thoughtRoutes, {
     prismaRepository: deps.prismaRepository,
-    postQueue: deps.postQueue,
+    thoughtQueue: deps.thoughtQueue,
   });
 
   registerProtectedRoute(app, "/api/playlist", playlistRoutes, {
