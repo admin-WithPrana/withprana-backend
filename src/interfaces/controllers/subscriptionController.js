@@ -1,6 +1,29 @@
 export class SubscriptionController {
-  constructor(subscriptionUseCases) {
+  constructor(subscriptionUseCases, sseService) {
     this.subscriptionUseCases = subscriptionUseCases;
+    this.sseService = sseService;
+  }
+
+  async subscribeSSE(request, reply) {
+    const userId = request.user.id;
+    
+    // Set proper headers for SSE
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+    
+    reply.raw.write(`retry: 10000\n\n`);
+    
+    // Register the client
+    this.sseService.addClient(userId, reply);
+    
+    // Handle client disconnect
+    request.raw.on('close', () => {
+      this.sseService.removeClient(userId, reply);
+    });
   }
 
   async createCheckoutSession(request, reply) {

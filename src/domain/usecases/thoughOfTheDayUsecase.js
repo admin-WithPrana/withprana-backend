@@ -110,9 +110,36 @@ export class ThoughtOfTheDayUsecase {
   }
 
   // Get thoughts by filter
-  async getThoughts({ status = null, limit = null, skip = null, sort, order }) {
+  async getThoughts({ status = null, limit = null, skip = null, sort, order, search = null }) {
     try {
-      return await this.thoughtRepository.findAll({ status, limit, skip, sort, order });
+      return await this.thoughtRepository.findAll({ status, limit, skip, sort, order, search });
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  // Get a single thought by ID
+  async getThoughtById(id) {
+    try {
+      return await this.thoughtRepository.findById(id);
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  // Update a thought
+  async updateThought(id, data) {
+    try {
+      return await this.thoughtRepository.update(id, data);
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  // Delete a thought
+  async deleteThought(id) {
+    try {
+      return await this.thoughtRepository.delete(id);
     } catch (error) {
       throw new Error(error.message);
     }

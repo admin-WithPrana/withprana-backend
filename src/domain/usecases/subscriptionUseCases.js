@@ -4,11 +4,13 @@ export class SubscriptionUseCases {
     userRepository,
     stripeService,
     notificationService,
+    sseService,
   ) {
     this.subscriptionRepo = subscriptionRepository;
     this.userRepo = userRepository;
     this.stripeService = stripeService;
     this.notificationService = notificationService;
+    this.sseService = sseService;
   }
 
   async createSubscriptionCheckout(userId, planId) {
@@ -714,6 +716,14 @@ export class SubscriptionUseCases {
               invoice.hosted_invoice_url,
             );
           }
+          
+          if (this.sseService) {
+            this.sseService.sendEventToUser(existingSubscription.userId, "payment_success", {
+              message: "Subscription payment succeeded",
+              amount: invoice.amount_paid / 100,
+              currency: invoice.currency
+            });
+          }
         }
       } else {
         // Fallback or New Subscription for No-Trial plans:
@@ -820,6 +830,13 @@ export class SubscriptionUseCases {
             console.log(
               `Created new subscription ${newSub.id} and transaction for user ${userId}`,
             );
+            if (this.sseService) {
+              this.sseService.sendEventToUser(userId, "payment_success", {
+                message: "Subscription created successfully",
+                amount: invoice.amount_paid / 100,
+                currency: invoice.currency
+              });
+            }
           } else {
             console.error(
               "Failed to retrieve newly created subscription for transaction creation.",
@@ -1034,6 +1051,13 @@ export class SubscriptionUseCases {
       console.log(
         `Subscription created for user ${userId} via webhook. Status: ${status}`,
       );
+      
+      if (this.sseService) {
+        this.sseService.sendEventToUser(userId, "payment_success", {
+          message: "Checkout session completed successfully",
+          status: status
+        });
+      }
     } catch (error) {
       console.error("Error handling checkout session completed:", error);
       await this.subscriptionRepo.updateTransactionByCheckoutSession(

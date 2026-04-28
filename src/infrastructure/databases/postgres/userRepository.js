@@ -96,27 +96,60 @@ export class PrismaUserRepository {
     limit = 10,
     sort,
     order,
+    search,
   } = {}) {
     try {
       const where = {};
-      if (signupMethod) where.signupMethod = signupMethod;
-      if (subscriptionType) where.subscriptionType = subscriptionType;
+      if (signupMethod) where.signupMethod = { equals: signupMethod, mode: "insensitive" };
+      if (subscriptionType) where.subscriptionType = { equals: subscriptionType, mode: "insensitive" };
+
+      const orderBy = sort
+        ? { [sort]: order?.toLowerCase() === "asc" ? "asc" : "desc" }
+        : undefined;
+
+      // When searching, fetch all matching records (no pagination at DB level)
+      // because name/email are encrypted and must be filtered after decryption.
+      if (search) {
+        const allUsers = await this.prisma.user.findMany({
+          where,
+          ...(orderBy && { orderBy }),
+        });
+
+        const term = search.toLowerCase();
+        const decryptedAll = allUsers.map((u) => this._decryptUser({ ...u }));
+        const filtered = decryptedAll.filter(
+          (u) =>
+            (u.name && u.name.toLowerCase().includes(term)) ||
+            (u.email && u.email.toLowerCase().includes(term))
+        );
+
+        const total = filtered.length;
+        const skip = (page - 1) * limit;
+        const data = filtered.slice(skip, skip + limit);
+
+        return {
+          data,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+          },
+        };
+      }
 
       const skip = (page - 1) * limit;
       const take = limit;
 
-      const users = await this.prisma.user.findMany({
-        where,
-        skip,
-        take,
-        ...(sort && {
-          orderBy: {
-            [sort]: order?.toLowerCase() === "asc" ? "asc" : "desc",
-          },
+      const [users, total] = await Promise.all([
+        this.prisma.user.findMany({
+          where,
+          skip,
+          take,
+          ...(orderBy && { orderBy }),
         }),
-      });
-
-      const total = await this.prisma.user.count({ where });
+        this.prisma.user.count({ where }),
+      ]);
 
       return {
         data: users.map((user) => this._decryptUser({ ...user })),
@@ -135,10 +168,44 @@ export class PrismaUserRepository {
 
   async findById(id) {
     try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: id },
-      });
-      return this._decryptUser(user);
+      const [user, listeningAgg] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id },
+          include: {
+            _count: { select: { likedMeditations: true, watchHistory: true } },
+            loginHistory: {
+              orderBy: { loggedInAt: "desc" },
+              take: 1,
+              select: { loggedInAt: true },
+            },
+            subscriptions: {
+              where: { status: { in: ["ACTIVE", "TRIALING"] } },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { currentPeriodEnd: true },
+            },
+          },
+        }),
+        this.prisma.meditationWatchHistory.aggregate({
+          where: { userId: id },
+          _sum: { watchedSeconds: true },
+        }),
+      ]);
+
+      if (!user) return null;
+
+      const decrypted = this._decryptUser(user);
+      decrypted.likedMeditationsCount = user._count.likedMeditations;
+      decrypted.meditationsPlayedCount = user._count.watchHistory;
+      decrypted.lastLogin = user.loginHistory?.[0]?.loggedInAt ?? null;
+      decrypted.trialEnds = user.subscriptions?.[0]?.currentPeriodEnd ?? null;
+      decrypted.totalListeningSeconds = listeningAgg._sum.watchedSeconds ?? 0;
+
+      delete decrypted._count;
+      delete decrypted.loginHistory;
+      delete decrypted.subscriptions;
+
+      return decrypted;
     } catch (error) {
       console.error("Error finding user by ID:", error);
       throw error;

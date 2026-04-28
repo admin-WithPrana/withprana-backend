@@ -60,14 +60,14 @@ export class MeditationRepository {
         }),
         ...(data.tags &&
           data.tags.length > 0 && {
-            meditationTags: {
-              create: data.tags.map((tagId) => ({
-                tag: {
-                  connect: { id: tagId },
-                },
-              })),
-            },
-          }),
+          meditationTags: {
+            create: data.tags.map((tagId) => ({
+              tag: {
+                connect: { id: tagId },
+              },
+            })),
+          },
+        }),
       },
       include: {
         category: true,
@@ -154,15 +154,24 @@ export class MeditationRepository {
     });
   }
 
-  async findAll(limit = 10, page = 1, sort, order) {
+  async findAll(limit = 10, page = 1, sort, order, search, isPremium, categoryId) {
     await this.ensurePrisma();
     const skip = (Number(page || 1) - 1) * Number(limit || 10);
 
+    const where = {
+      isDeleted: false,
+      ...(search?.trim() && {
+        title: { contains: search.trim(), mode: "insensitive" },
+      }),
+      ...(isPremium !== undefined && isPremium !== "" && {
+        isPremium: isPremium === "true" || isPremium === true,
+      }),
+      ...(categoryId && { categoryId }),
+    };
+
     const [data, total] = await Promise.all([
       this.prisma.meditation.findMany({
-        where: {
-          isDeleted: false,
-        },
+        where,
         orderBy: {
           [sort || "createdAt"]:
             order?.toLowerCase() === "asc" ? "asc" : "desc",
@@ -179,11 +188,7 @@ export class MeditationRepository {
         take: Number(limit || 10),
         skip: Number(skip || 0),
       }),
-      this.prisma.meditation.count({
-        where: {
-          isDeleted: false,
-        },
-      }),
+      this.prisma.meditation.count({ where }),
     ]);
 
     return {
@@ -203,7 +208,7 @@ export class MeditationRepository {
     console.log(data);
     if (data.categoryId !== undefined) {
       updateData.category = {
-        connect: { id: Number(data.categoryId) },
+        connect: { id: data.categoryId },
       };
       delete updateData.categoryId;
     }

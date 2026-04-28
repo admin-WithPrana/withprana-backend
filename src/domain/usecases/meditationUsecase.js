@@ -1,3 +1,5 @@
+import { pushQueue } from "../../config/bullmq.js";
+
 export class MeditationUsecase {
   constructor(
     meditationRepository,
@@ -49,6 +51,14 @@ export class MeditationUsecase {
           removeOnFail: false,
         },
       );
+    } else if (meditation.active) {
+      // Immediate release: Dispatch broadcast Push Notification
+      await pushQueue.add("newMeditationPush", {
+        title: "New Meditation Released!",
+        message: `"${meditation.title}" is now available to listen to.`,
+        imageUrl: meditation.thumbnail,
+        sendToAllSubscribed: false // Dispatch scalable chunked customer database notifications via bull worker
+      });
     }
 
     return meditation;
@@ -92,8 +102,8 @@ export class MeditationUsecase {
     return meditation;
   }
 
-  async getAllMeditations(limit, page, sort, order) {
-    return this.meditationRepository.findAll(limit, page, sort, order);
+  async getAllMeditations(limit, page, sort, order, search, isPremium, categoryId) {
+    return this.meditationRepository.findAll(limit, page, sort, order, search, isPremium, categoryId);
   }
 
   async getMeditationsByUserSelectedTags(userId, limit, page, sort, order) {

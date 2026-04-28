@@ -23,6 +23,21 @@ export class ThoughtOfTheDayRepository {
     });
   }
 
+  // Update a thought by ID
+  async update(id, data) {
+    return this.prisma.thoughtOfTheDay.update({
+      where: { id },
+      data,
+    });
+  }
+
+  // Delete a thought by ID
+  async delete(id) {
+    return this.prisma.thoughtOfTheDay.delete({
+      where: { id },
+    });
+  }
+
   // Fetch all thoughts by filters (e.g., status)
   async findAll({
     status = null,
@@ -30,9 +45,11 @@ export class ThoughtOfTheDayRepository {
     skip = null,
     sort = "createdAt",
     order,
+    search = null,
   }) {
     const where = {
       ...(status && { status }),
+      ...(search && { title: { contains: search, mode: 'insensitive' } }),
     };
 
     const [data, total] = await Promise.all([

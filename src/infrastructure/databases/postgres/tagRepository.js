@@ -4,7 +4,7 @@ export class TagRepository {
     }
 
     async create(data) {
-        return this.prisma.tag.create({ 
+        return this.prisma.tag.create({
             data: {
                 name: data.name,
             },
@@ -37,6 +37,13 @@ export class TagRepository {
             include: {
                 category: true
             }
+        });
+    }
+
+    async delete(id) {
+        return this.prisma.tag.update({
+            where: { id },
+            data: { isDeleted: true, active: false },
         });
     }
 }

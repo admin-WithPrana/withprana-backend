@@ -27,15 +27,93 @@ thoughtWorker.on("failed", (job, err) => {
   console.error(`Thought job failed ${job.id} with error: ${err.message}`);
 });
 
+// ----------------- Push Notification Queue -----------------
+import pushNotificationService from "../infrastructure/services/pushNotificationService.js";
+
+export const pushQueue = new Queue("pushNotificationQueue", { connection });
+export const pushWorker = new Worker(
+  "pushNotificationQueue",
+  async (job) => {
+    const { title, message, imageUrl, sendToAllSubscribed } = job.data;
+    
+    if (sendToAllSubscribed) {
+      // Broadcast mode relies on OneSignal internal logic
+      await pushNotificationService.sendNotification({
+        title,
+        message,
+        imageUrl,
+        sendToAllSubscribed: true
+      });
+    } else {
+      // Chunked delivery using customer database IDs
+      const batchSize = 10000;
+      let skip = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        // Fetch specific user customer IDs efficiently in chunks
+        const users = await prisma.user.findMany({
+          select: { id: true, active: true },
+          where: { active: true },
+          skip,
+          take: batchSize
+        });
+
+        if (users.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        const ids = users.map(u => String(u.id));
+        await pushNotificationService.sendNotification({
+          recipients: ids,
+          title,
+          message,
+          imageUrl
+        });
+
+        // Scalably save the isolated notification arrays into database
+        const historyPayload = users.map(u => ({
+          userId: String(u.id),
+          title: title || "New Notification",
+          message: message || "",
+          imageUrl: imageUrl || null
+        }));
+
+        await prisma.notification.createMany({
+          data: historyPayload,
+          skipDuplicates: true
+        });
+
+        skip += batchSize;
+      }
+    }
+  },
+  { connection },
+);
+
+pushWorker.on("failed", (job, err) => {
+  console.error(`Push job failed ${job.id} with error: ${err.message}`);
+});
+
 // ----------------- Meditation Queue -----------------
 export const meditationQueue = new Queue("meditationQueue", { connection });
 export const meditationWorker = new Worker(
   "meditationQueue",
   async (job) => {
     const { meditationId } = job.data;
-    await prisma.meditation.update({
+    const updatedMeditation = await prisma.meditation.update({
       where: { id: meditationId },
       data: { active: true },
+      select: { title: true, thumbnail: true }
+    });
+
+    // Schedule background broadcast of unlocked meditation across the 200,000+ base
+    await pushQueue.add("newMeditationPush", {
+      title: "New Meditation Released!",
+      message: `"${updatedMeditation.title}" is now available to listen to.`,
+      imageUrl: updatedMeditation.thumbnail,
+      sendToAllSubscribed: false // Passing false triggers the massive DB batching chunking loop you configured
     });
   },
   { connection },
