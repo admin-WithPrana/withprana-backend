@@ -102,8 +102,8 @@ export class MeditationUsecase {
     return meditation;
   }
 
-  async getAllMeditations(limit, page, sort, order) {
-    return this.meditationRepository.findAll(limit, page, sort, order);
+  async getAllMeditations(limit, page, sort, order, search, isPremium, categoryId) {
+    return this.meditationRepository.findAll(limit, page, sort, order, search, isPremium, categoryId);
   }
 
   async getMeditationsByUserSelectedTags(userId, limit, page, sort, order) {

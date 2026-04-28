@@ -97,12 +97,15 @@ export class MeditationController {
 
   async getAll(req, reply) {
     try {
-      const { limit, page, sort, order } = req.query;
+      const { limit, page, sort, order, search, isPremium, categoryId } = req.query;
       const meditations = await this.meditationUsecase.getAllMeditations(
         limit,
         page,
         sort,
         order,
+        search,
+        isPremium,
+        categoryId,
       );
       reply.send(meditations);
     } catch (err) {
