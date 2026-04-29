@@ -6,7 +6,7 @@ export class SubscriptionController {
 
   async subscribeSSE(request, reply) {
     const userId = request.user.id;
-    
+
     // Set proper headers for SSE
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -14,12 +14,12 @@ export class SubscriptionController {
       'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': '*'
     });
-    
+
     reply.raw.write(`retry: 10000\n\n`);
-    
+
     // Register the client
     this.sseService.addClient(userId, reply);
-    
+
     // Handle client disconnect
     request.raw.on('close', () => {
       this.sseService.removeClient(userId, reply);
@@ -141,8 +141,10 @@ export class SubscriptionController {
 
   async getPlans(request, reply) {
     try {
+      const includeHidden = request.query?.includeHidden === "true" || request.query?.includeHidden === true;
       const plans = await this.subscriptionUseCases.getSubscriptionPlans(
         request.user,
+        includeHidden,
       );
 
       if (plans?.isSubscribed) {
@@ -247,9 +249,8 @@ export class SubscriptionController {
 
       return reply.code(200).send({
         success: true,
-        message: `Plan ${
-          plan.visible ? "activated" : "deactivated"
-        } successfully`,
+        message: `Plan ${plan.visible ? "activated" : "deactivated"
+          } successfully`,
         data: plan,
       });
     } catch (error) {

@@ -716,7 +716,7 @@ export class SubscriptionUseCases {
               invoice.hosted_invoice_url,
             );
           }
-          
+
           if (this.sseService) {
             this.sseService.sendEventToUser(existingSubscription.userId, "payment_success", {
               message: "Subscription payment succeeded",
@@ -1051,7 +1051,7 @@ export class SubscriptionUseCases {
       console.log(
         `Subscription created for user ${userId} via webhook. Status: ${status}`,
       );
-      
+
       if (this.sseService) {
         this.sseService.sendEventToUser(userId, "payment_success", {
           message: "Checkout session completed successfully",
@@ -1446,7 +1446,7 @@ export class SubscriptionUseCases {
     return await this.subscriptionRepo.getUserTransactions(userId, filters);
   }
 
-  async getSubscriptionPlans(user) {
+  async getSubscriptionPlans(user, includeHidden = false) {
     // Check if user has an active subscription
     const result = await this.subscriptionRepo.isUserSubscribed(user.id);
 
@@ -1457,7 +1457,7 @@ export class SubscriptionUseCases {
       };
     }
 
-    return await this.subscriptionRepo.getAllSubscriptionPlans();
+    return await this.subscriptionRepo.getAllSubscriptionPlans(includeHidden);
   }
 
   async validatePremiumAccess(userId) {

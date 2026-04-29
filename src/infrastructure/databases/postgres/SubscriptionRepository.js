@@ -2,6 +2,7 @@ import {
   encryptDeterministic,
   decrypt,
   decryptDeterministic,
+  decryptUserKey,
 } from "../../../utils/encryption.js";
 
 export class SubscriptionRepository {
@@ -12,10 +13,18 @@ export class SubscriptionRepository {
   _decryptUser(user) {
     if (!user) return user;
     const decrypted = { ...user };
-    if (decrypted.name) decrypted.name = decrypt(decrypted.name);
+    try {
+      if (decrypted.encryptedUserKey) {
+        const userKey = decryptUserKey(decrypted.encryptedUserKey);
+        if (decrypted.name) decrypted.name = decrypt(decrypted.name, userKey);
+      } else {
+        if (decrypted.name) decrypted.name = decrypt(decrypted.name);
+      }
+    } catch (error) {
+      console.error("Decryption failed for user:", user.id, error);
+    }
     if (decrypted.email)
       decrypted.email = decryptDeterministic(decrypted.email);
-    // Handle nested user object if it exists (some queries return { user: ... })
     if (decrypted.user) {
       decrypted.user = this._decryptUser(decrypted.user);
     }
@@ -54,6 +63,7 @@ export class SubscriptionRepository {
             id: true,
             email: true,
             name: true,
+            encryptedUserKey: true,
             subscriptionType: true,
           },
         },
@@ -77,6 +87,7 @@ export class SubscriptionRepository {
             id: true,
             email: true,
             name: true,
+            encryptedUserKey: true,
             subscriptionType: true,
           },
         },
@@ -155,6 +166,7 @@ export class SubscriptionRepository {
             id: true,
             email: true,
             name: true,
+            encryptedUserKey: true,
           },
         },
         subscription: true,
@@ -313,10 +325,10 @@ export class SubscriptionRepository {
     return this._decryptUser(user);
   }
 
-  async getAllSubscriptionPlans() {
+  async getAllSubscriptionPlans(includeHidden = false) {
     try {
       return await this.prisma.subscriptionPlan.findMany({
-        where: { visible: true },
+        where: includeHidden ? {} : { visible: true },
         orderBy: { price: "asc" },
       });
     } catch (error) {
@@ -392,6 +404,7 @@ export class SubscriptionRepository {
               id: true,
               email: true,
               name: true,
+              encryptedUserKey: true,
               subscriptionType: true,
             },
           },
@@ -431,6 +444,7 @@ export class SubscriptionRepository {
             id: true,
             email: true,
             name: true,
+            encryptedUserKey: true,
             subscriptionType: true,
           },
         },
@@ -484,6 +498,7 @@ export class SubscriptionRepository {
               id: true,
               email: true,
               name: true,
+              encryptedUserKey: true,
             },
           },
           subscription: {
