@@ -8,6 +8,8 @@ export class UserController {
     notificationService,
     loginHistoryRepository,
     subscriptionRepository,
+    qrRepository,
+    sseService
   ) {
     this.userUseCases = new UserUseCases(
       userRepository,
@@ -15,7 +17,10 @@ export class UserController {
       notificationService,
       loginHistoryRepository,
       subscriptionRepository,
+      qrRepository,
+      sseService
     );
+    this.sseService = sseService;
   }
 
   async register(request, reply) {
@@ -336,5 +341,82 @@ export class UserController {
         message: error.message,
       });
     }
+  }
+
+  async generateQr(request, reply) {
+    try {
+      const result = await this.userUseCases.generateQrToken();
+      return reply.code(200).send({
+        success: true,
+        qrToken: result.qrToken,
+        expiresAt: result.expiresAt
+      });
+    } catch (error) {
+      return reply.code(500).send({
+        success: false,
+        message: error.message || "Internal server error",
+      });
+    }
+  }
+
+  async verifyQr(request, reply) {
+    try {
+      const { qrToken } = request.body;
+      const userId = request.user.id;
+      const device = request.body.device;
+      
+      if (!qrToken) {
+        return reply.code(400).send({ success: false, message: "QR Token is required" });
+      }
+
+      const result = await this.userUseCases.verifyQrToken(qrToken, userId, request.ip, device);
+      return reply.code(200).send(result);
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  async checkQrStatus(request, reply) {
+    try {
+      const { token } = request.query;
+      if (!token) {
+        return reply.code(400).send({ success: false, message: "QR Token is required" });
+      }
+      const result = await this.userUseCases.checkQrStatus(token);
+      return reply.code(200).send(result);
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  async qrSse(request, reply) {
+    const { token } = request.query;
+    if (!token) {
+      return reply.code(400).send("Token is required");
+    }
+
+    reply.raw.setHeader('Content-Type', 'text/event-stream');
+    reply.raw.setHeader('Cache-Control', 'no-cache');
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Send an initial event so connection is established
+    reply.raw.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`);
+
+    if (this.sseService) {
+      this.sseService.addClient(token, reply);
+    }
+
+    request.raw.on('close', () => {
+      if (this.sseService) {
+        this.sseService.removeClient(token, reply);
+      }
+    });
   }
 }

@@ -16,12 +16,16 @@ export class UserUseCases {
     notificationService, // Changed from mailer
     loginHistoryRepository,
     subscriptionRepo,
+    qrRepo,
+    sseService
   ) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
     this.notificationService = notificationService; // Store notificationService
     this.loginHistoryRepository = loginHistoryRepository;
     this.subscriptionRepository = subscriptionRepo;
+    this.qrRepository = qrRepo;
+    this.sseService = sseService;
   }
 
   generateRefreshToken() {
@@ -586,5 +590,91 @@ export class UserUseCases {
       user: decryptedUser,
       success: true,
     };
+  }
+
+  async generateQrToken() {
+    const qrToken = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 hours from now
+
+    await this.qrRepository.createSession({
+      qrToken,
+      status: "PENDING",
+      expiresAt,
+    });
+
+    return { qrToken, expiresAt };
+  }
+
+  async verifyQrToken(qrToken, userId, ip, device) {
+    const session = await this.qrRepository.findByToken(qrToken);
+    
+    if (!session) {
+      throw new Error("QR session not found");
+    }
+
+    if (session.status !== "PENDING") {
+      throw new Error("QR session has already been used or is expired");
+    }
+
+    if (new Date() > session.expiresAt) {
+      throw new Error("QR session has expired");
+    }
+
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const decryptedUser = this._decryptUser(user);
+
+    const { token, loginHistory } = await this.generateToken(decryptedUser, device, ip);
+    const refreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(decryptedUser, refreshToken);
+
+    await this.qrRepository.updateSession(qrToken, {
+      status: "SCANNED",
+      userId: decryptedUser.id,
+      token,
+      refreshToken,
+    });
+
+    if (this.sseService) {
+      this.sseService.sendEventToUser(qrToken, 'qr-scanned', {
+        success: true,
+        token,
+        refreshToken,
+        user: {
+          id: decryptedUser.id,
+          name: decryptedUser.name,
+          email: decryptedUser.email,
+          image: decryptedUser.image,
+        }
+      });
+    }
+
+    return { success: true, message: "QR token verified successfully" };
+  }
+
+  async checkQrStatus(qrToken) {
+    const session = await this.qrRepository.findByToken(qrToken);
+    if (!session) {
+      throw new Error("QR session not found");
+    }
+
+    if (new Date() > session.expiresAt) {
+      throw new Error("QR session has expired");
+    }
+
+    if (session.status === "SCANNED") {
+      const user = await this.userRepository.findById(session.userId);
+      const decryptedUser = this._decryptUser(user);
+      return {
+        status: "SCANNED",
+        token: session.token,
+        refreshToken: session.refreshToken,
+        user: decryptedUser
+      };
+    }
+
+    return { status: session.status };
   }
 }

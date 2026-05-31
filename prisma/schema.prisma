@@ -74,6 +74,7 @@ model User {
   notificationPreferences NotificationPreferences?
   downloadedMeditations DownloadedMeditation[]
   notifications    Notification[]
+  qrSessions       QrSession[]
 
   @@map("users")
 }
@@ -490,4 +491,19 @@ model Notification {
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+model QrSession {
+  id           String   @id @default(uuid())
+  qrToken      String   @unique
+  status       String   @default("PENDING") // PENDING, SCANNED
+  userId       String?
+  token        String?  // the generated access token
+  refreshToken String?  // the generated refresh token
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime // will be set to 12 hours from creation
+  
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("qr_sessions")
 }

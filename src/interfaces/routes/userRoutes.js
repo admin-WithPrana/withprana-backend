@@ -8,8 +8,9 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 
 import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
+import { QrRepository } from "../../infrastructure/databases/postgres/qrRepository.js";
 
-export const setupRoutes = (app, { prismaRepository, mailer }) => {
+export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
     throw new Error("Prisma client is not properly initialized");
   }
@@ -21,6 +22,7 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   );
   const subscriptionRepo = new SubscriptionRepository(prismaRepository.prisma);
   const notificationService = new NotificationService();
+  const qrRepo = new QrRepository(prismaRepository.prisma);
 
   const userController = new UserController(
     userRepo,
@@ -28,6 +30,8 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
     notificationService,
     loginHistoryRepository,
     subscriptionRepo,
+    qrRepo,
+    sseService
   );
 
   app.register(fastifyMultipart, {
@@ -93,6 +97,11 @@ export const setupRoutes = (app, { prismaRepository, mailer }) => {
   app.post("/logout", { preHandler: authMiddleware }, (request, reply) =>
     userController.logout(request, reply),
   );
+
+  app.get("/qr/generate", (request, reply) => userController.generateQr(request, reply));
+  app.get("/qr/status", (request, reply) => userController.checkQrStatus(request, reply));
+  app.get("/qr/sse", (request, reply) => userController.qrSse(request, reply));
+  app.post("/qr/verify", { preHandler: authMiddleware }, (request, reply) => userController.verifyQr(request, reply));
 
   app.post("/refresh-token", (request, reply) =>
     userController.refresh(request, reply),
