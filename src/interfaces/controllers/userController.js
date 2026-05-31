@@ -140,6 +140,7 @@ export class UserController {
           token: result.token,
           refreshToken: result.refreshToken,
           oauth: result.oauth,
+          ...(result.temp && { temp: result.temp }),
         });
       } else {
         return reply.code(400).send({
