@@ -18,6 +18,9 @@ export class MeditationWatchHistoryRepository {
     async findByUserId(userId) {
         return this.prisma.meditationWatchHistory.findMany({
             where: { userId },
+            include: {
+                meditation: true,
+            },
             orderBy: { watchedAt: 'desc' },
         });
     }
