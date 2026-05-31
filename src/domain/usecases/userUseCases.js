@@ -426,7 +426,7 @@ export class UserUseCases {
     }
   }
 
-  async generateToken(user, device, ip) {
+  async generateToken(user, device, ip, expiresIn = "1d") {
     const loginHistory = await this.loginHistoryRepository.create({
       userId: user.id,
       role: "USER",
@@ -469,7 +469,7 @@ export class UserUseCases {
         subscriptionType: subscriptionType,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" },
+      { expiresIn: expiresIn },
     );
 
     return {
@@ -594,7 +594,7 @@ export class UserUseCases {
 
   async generateQrToken() {
     const qrToken = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 hours from now
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
     await this.qrRepository.createSession({
       qrToken,
@@ -626,7 +626,7 @@ export class UserUseCases {
     }
     const decryptedUser = this._decryptUser(user);
 
-    const { token, loginHistory } = await this.generateToken(decryptedUser, device, ip);
+    const { token, loginHistory } = await this.generateToken(decryptedUser, device, ip, "12h");
     const refreshToken = this.generateRefreshToken();
     await this.storeRefreshToken(decryptedUser, refreshToken);
 
