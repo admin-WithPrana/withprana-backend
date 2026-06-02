@@ -41,7 +41,6 @@ export class MeditationController {
         isPremium: isPremium === "true" || isPremium === true,
         categoryId: categoryId,
         subcategoryId: subcategoryId || null,
-        subcategoryId,
         type,
         tags,
         scheduledAt,
@@ -225,6 +224,16 @@ export class MeditationController {
       });
     } catch (err) {
       reply.status(400).send({ message: err.message });
+    }
+  }
+
+  async getWatchHistory(req, reply) {
+    try {
+      const user = req.user;
+      const history = await this.meditationUsecase.getWatchHistory(user.id);
+      reply.send(history);
+    } catch (err) {
+      reply.status(500).send({ message: err.message });
     }
   }
 

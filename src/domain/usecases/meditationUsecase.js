@@ -242,6 +242,10 @@ export class MeditationUsecase {
       watchedAt: new Date(),
     });
   }
+  async getWatchHistory(userId) {
+    return this.meditationWatchHistoryRepository.findByUserId(userId);
+  }
+
   async getPopularMeditations(limit = 10) {
     return this.meditationRepository.findMostPopular(limit);
   }

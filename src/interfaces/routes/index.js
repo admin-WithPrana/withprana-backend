@@ -69,6 +69,7 @@ export async function registerRoutes(app, deps) {
       setupRoutes(setupScope, {
         prismaRepository: deps.prismaRepository,
         mailer: deps.mailer,
+        sseService: deps.sseService,
       });
     },
     { prefix: "/api/user" },

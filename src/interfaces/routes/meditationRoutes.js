@@ -293,4 +293,5 @@ export const meditationRoutes = async (
   app.put("/watch-time", (req, reply) =>
     controller.updateMeditationTime(req, reply),
   );
+  app.get("/history", (req, reply) => controller.getWatchHistory(req, reply));
 };
