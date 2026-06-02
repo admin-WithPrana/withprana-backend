@@ -6,7 +6,16 @@ export const policyRoutes = async (app, { prismaRepository }) => {
   const repo = new PolicyRepository(prismaRepository.prisma);
   const usecase = new PolicyUsecase(repo);
   const controller = new PolicyController(usecase);
-  
+
+  // Protected: create / update (admin only)
   app.post("/:type", (req, reply) => controller.create(req, reply));
+};
+
+export const publicPolicyRoutes = async (app, { prismaRepository }) => {
+  const repo = new PolicyRepository(prismaRepository.prisma);
+  const usecase = new PolicyUsecase(repo);
+  const controller = new PolicyController(usecase);
+
+  // Public: anyone can read policies
   app.get("/:type", (req, reply) => controller.getById(req, reply));
 };

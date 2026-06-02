@@ -28,87 +28,94 @@ export class PlaylistController {
     }
   }
 
-async getById(req, reply) {
-  try {
-    const { id } = req.params;
-    let { page = 1, limit = 10 } = req.query;
-    
-    // Validate and sanitize pagination parameters
-    page = Math.max(1, parseInt(page)) || 1;
-    limit = Math.min(Math.max(1, parseInt(limit)), 100) || 10;
-    
-    const playlist = await this.usecase.getPlaylistById(id, { page, limit });
-    
-    if (!playlist) {
-      return reply.code(404).send({ 
-        message: "Playlist not found",
-        error: "PLAYLIST_NOT_FOUND"
-      });
-    }
-    
-    const totalItems = playlist._count?.items || 0;
-    const totalPages = Math.ceil(totalItems / limit);
-    
-    // Remove internal fields from response
-    const { _count, ...playlistData } = playlist;
-    
-    return reply.code(200).send({
-      message: "Playlist fetched successfully",
-      data: playlistData,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalItems,
-        itemsPerPage: limit,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
+  async getById(req, reply) {
+    try {
+      const { id } = req.params;
+      let { page = 1, limit = 10 } = req.query;
+
+      // Validate and sanitize pagination parameters
+      page = Math.max(1, parseInt(page)) || 1;
+      limit = Math.min(Math.max(1, parseInt(limit)), 100) || 10;
+
+      const playlist = await this.usecase.getPlaylistById(id, { page, limit });
+
+      if (!playlist) {
+        return reply.code(404).send({
+          message: "Playlist not found",
+          error: "PLAYLIST_NOT_FOUND"
+        });
       }
-    });
-    
-  } catch (err) {
-    // Handle specific error types
-    if (err.message.includes("not found")) {
-      return reply.code(404).send({ 
-        error: "Playlist not found",
-        message: err.message 
+
+      const totalItems = playlist._count?.items || 0;
+      const totalPages = Math.ceil(totalItems / limit);
+
+      // Remove internal fields from response
+      const { _count, ...playlistData } = playlist;
+
+      return reply.code(200).send({
+        message: "Playlist fetched successfully",
+        data: playlistData,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalItems,
+          itemsPerPage: limit,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      });
+
+    } catch (err) {
+      // Handle specific error types
+      if (err.message.includes("not found")) {
+        return reply.code(404).send({
+          error: "Playlist not found",
+          message: err.message
+        });
+      }
+
+      return reply.code(400).send({
+        error: "Bad Request",
+        message: err.message
       });
     }
-    
-    return reply.code(400).send({ 
-      error: "Bad Request",
-      message: err.message 
-    });
   }
-}
 
   async getAll(req, reply) {
-  try {
-    const { userId, page = 1, limit = 10 } = req.query;
+    try {
+      const { page = 1, limit = 10 } = req.query;
+      const authenticatedUserId = req.user?.id;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const { playlists, totalCount } = await this.usecase.getAll(
-      {
-        where: userId ? { userId: BigInt(userId) } : {},
-        skip,
-        take: parseInt(limit),
+      if (!authenticatedUserId) {
+        return reply.code(400).send({
+          error: "User id is required",
+        });
       }
-    );
 
-    return reply.code(200).send({
-      message: "Playlists fetched successfully",
-      data: playlists,
-      pagination: {
-        total: totalCount,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(totalCount / parseInt(limit)),
-      },
-    });
-  } catch (err) {
-    return reply.code(400).send({ error: err.message });
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+
+      const { playlists, totalCount } = await this.usecase.getAll(
+        {
+          where: { userId: authenticatedUserId },
+          skip,
+          take: parseInt(limit),
+        }
+      );
+
+      return reply.code(200).send({
+        message: "Playlists fetched successfully",
+        data: playlists,
+        pagination: {
+          total: totalCount,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+        },
+      });
+    } catch (err) {
+      return reply.code(400).send({ error: err.message });
+    }
   }
-}
 
 
   async delete(req, reply) {

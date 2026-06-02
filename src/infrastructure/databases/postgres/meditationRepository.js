@@ -147,6 +147,69 @@ export class MeditationRepository {
     return meditations.map((m) => ({ ...m, isLiked: false }));
   }
 
+  async getMeditationsBySubcategoryPaginated(
+    subcategoryId,
+    userId,
+    limit = 10,
+    page = 1,
+    sort,
+    order,
+  ) {
+    await this.ensurePrisma();
+
+    const parsedLimit = Number(limit || 10);
+    const parsedPage = Number(page || 1);
+    const skip = (parsedPage - 1) * parsedLimit;
+
+    const where = {
+      isDeleted: false,
+      subcategoryId,
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.meditation.findMany({
+        where,
+        include: {
+          category: true,
+          subcategory: true,
+          ...(userId && {
+            likedUsers: {
+              where: { userId },
+              select: { id: true },
+            },
+          }),
+        },
+        orderBy: {
+          [sort || "createdAt"]:
+            order?.toLowerCase() === "asc" ? "asc" : "desc",
+        },
+        take: parsedLimit,
+        skip,
+      }),
+      this.prisma.meditation.count({ where }),
+    ]);
+
+    const transformed = data.map((meditation) => {
+      if (!userId) {
+        return { ...meditation, isLiked: false };
+      }
+
+      const isLiked = meditation.likedUsers?.length > 0;
+      const { likedUsers, ...rest } = meditation;
+      return { ...rest, isLiked };
+    });
+
+    return {
+      data: transformed,
+      pagination: {
+        total,
+        page: parsedPage,
+        limit: parsedLimit,
+        totalPages: Math.ceil(total / parsedLimit),
+      },
+    };
+  }
+
   async getMeditationByCategoryId(id) {
     await this.ensurePrisma();
     return this.prisma.meditation.findMany({

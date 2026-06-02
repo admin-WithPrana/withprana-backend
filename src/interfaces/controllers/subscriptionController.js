@@ -1,18 +1,56 @@
+import jwt from "jsonwebtoken";
+
 export class SubscriptionController {
   constructor(subscriptionUseCases, sseService) {
     this.subscriptionUseCases = subscriptionUseCases;
     this.sseService = sseService;
   }
 
+  _getCookieValue(cookieHeader, cookieName) {
+    if (!cookieHeader) return null;
+
+    const cookies = cookieHeader.split(";").map((item) => item.trim());
+    const match = cookies.find((cookie) => cookie.startsWith(`${cookieName}=`));
+
+    if (!match) return null;
+
+    return decodeURIComponent(match.slice(cookieName.length + 1));
+  }
+
   async subscribeSSE(request, reply) {
-    const userId = request.user.id;
+    const authHeader = request.headers.authorization;
+    const cookieToken = this._getCookieValue(request.headers.cookie, "auth_token");
+    const token = authHeader?.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : cookieToken;
+
+    if (!token) {
+      return reply.code(401).send({ message: "Not authorized" });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      return reply.code(401).send({ message: "Invalid or expired token" });
+    }
+
+    const user = await this.subscriptionUseCases.userRepo.findById(decoded.id);
+    if (!user) {
+      return reply.code(401).send({ message: "User not found" });
+    }
+
+    const userId = user.id;
+    const origin = request.headers.origin || process.env.FRONTEND_URL || "*";
 
     // Set proper headers for SSE
     reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
+      Vary: "Origin",
     });
 
     reply.raw.write(`retry: 10000\n\n`);
@@ -28,12 +66,13 @@ export class SubscriptionController {
 
   async createCheckoutSession(request, reply) {
     try {
-      const { planId } = request.body;
+      const { planId, successUrl, cancelUrl } = request.body;
       const userId = request.user.id;
 
       const result = await this.subscriptionUseCases.createSubscriptionCheckout(
         userId,
         planId,
+        { successUrl, cancelUrl },
       );
 
       return reply.code(200).send({

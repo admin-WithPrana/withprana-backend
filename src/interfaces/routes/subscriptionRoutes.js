@@ -122,13 +122,14 @@ export const setupSubscriptionRoutes = (
     },
   });
 
+  app.get("/sse/subscribe", (req, res) =>
+    subscriptionController.subscribeSSE(req, res),
+  );
+
   registerProtectedRoute(
     app,
     "",
     async (protectedApp) => {
-      protectedApp.get("/sse/subscribe", (req, res) =>
-        subscriptionController.subscribeSSE(req, res),
-      );
       protectedApp.get("/plans", (req, res) =>
         subscriptionController.getPlans(req, res),
       );

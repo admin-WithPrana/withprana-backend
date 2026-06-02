@@ -82,6 +82,27 @@ export class MeditationController {
     }
   }
 
+  async getMeditationsBySubcategoryPaginated(req, reply) {
+    try {
+      const { subcategoryId, limit, page, sort, order } = req.query;
+      const user = req.user;
+
+      const result =
+        await this.meditationUsecase.getMeditationsBySubcategoryPaginated(
+          subcategoryId,
+          user,
+          limit,
+          page,
+          sort,
+          order,
+        );
+
+      reply.send(result);
+    } catch (err) {
+      reply.status(400).send({ message: err.message });
+    }
+  }
+
   async getMeditationByCategoryId(req, reply) {
     try {
       const id = req.query.id;
@@ -167,11 +188,40 @@ export class MeditationController {
   async updateMeditationTime(req, reply) {
     try {
       const { id, ...data } = req.body;
+
+      if (!id) {
+        return reply.status(400).send({
+          message: "Watch history id is required",
+        });
+      }
+
       const result = await this.meditationUsecase.updateMeditationTime(
         id,
         data,
       );
       reply.send(result);
+    } catch (err) {
+      reply.status(400).send({ message: err.message });
+    }
+  }
+
+  async startMeditationSession(req, reply) {
+    try {
+      const { meditationId } = req.body;
+
+      if (!meditationId) {
+        return reply.status(400).send({ message: "Meditation id is required" });
+      }
+
+      const history = await this.meditationUsecase.startMeditationSession({
+        user: req.user,
+        meditationId,
+      });
+
+      reply.send({
+        message: "Meditation session started",
+        history,
+      });
     } catch (err) {
       reply.status(400).send({ message: err.message });
     }
@@ -198,6 +248,25 @@ export class MeditationController {
       reply.send(result);
     } catch (err) {
       reply.status(500).send({ message: err.message });
+    }
+  }
+
+  async getRecentlyListened(req, reply) {
+    try {
+      const user = req.user;
+      const limit = Number.parseInt(req.query?.limit || "5", 10);
+      const safeLimit = Number.isFinite(limit)
+        ? Math.min(Math.max(limit, 1), 20)
+        : 5;
+
+      const data = await this.meditationUsecase.getRecentlyListenedMeditations(
+        user?.id,
+        safeLimit,
+      );
+
+      reply.send({ data });
+    } catch (err) {
+      reply.status(400).send({ message: err.message });
     }
   }
 }

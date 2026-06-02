@@ -1,5 +1,39 @@
 import { pushQueue } from "../../config/bullmq.js";
 
+function formatDurationToMMSS(value) {
+  if (value === null || value === undefined) return "00:00";
+
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    const mmssMatch = normalized.match(/^(\d{1,2}):(\d{1,2})$/);
+
+    if (mmssMatch) {
+      const minutes = Number(mmssMatch[1]);
+      const seconds = Math.min(59, Number(mmssMatch[2]));
+      return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    const minMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*min$/i);
+    if (minMatch) {
+      const minutes = Number(minMatch[1]);
+      const totalSeconds = Number.isFinite(minutes)
+        ? Math.round(minutes * 60)
+        : 0;
+      return `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
+    }
+  }
+
+  const totalSeconds = Number(value);
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return "00:00";
+  }
+
+  const safeSeconds = Math.floor(totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 export class MeditationUsecase {
   constructor(
     meditationRepository,
@@ -67,22 +101,51 @@ export class MeditationUsecase {
   async getMeditationById(id, user) {
     const meditation = await this.meditationRepository.findById(id, user?.id);
     if (!meditation) throw new Error("Meditation not found");
-    if (user?.role == "USER") {
-      const watchHistory = await this.meditationWatchHistoryRepository.create({
-        userId: user.id,
-        meditationId: meditation.id,
-        watchedSeconds: 0,
-        completed: false,
-        device: user.device || null,
-        watchedAt: new Date(),
-      });
+
+    // Return latest history for resume UI, but do not create on page open.
+    if (user?.id) {
+      const histories =
+        await this.meditationWatchHistoryRepository.findByUserAndMeditation(
+          user.id,
+          meditation.id,
+        );
+
+      const latestHistory = histories[0] || null;
 
       return {
         meditation,
-        watchHistory,
+        watchHistory: latestHistory,
       };
     }
+
     return meditation;
+  }
+
+  async startMeditationSession({ user, meditationId }) {
+    if (!user?.id) {
+      throw new Error("User authentication required");
+    }
+
+    const meditation = await this.meditationRepository.findById(
+      meditationId,
+      user.id,
+    );
+
+    if (!meditation) {
+      throw new Error("Meditation not found");
+    }
+
+    // Count a play only when a real listening session starts.
+    await this.incrementPlayCount(meditationId);
+
+    return this.meditationWatchHistoryRepository.create({
+      userId: user.id,
+      meditationId,
+      watchedSeconds: 0,
+      completed: false,
+      device: user.device || null,
+      watchedAt: new Date(),
+    });
   }
 
   async getMeditationBySubCategoryId(id, user) {
@@ -93,6 +156,28 @@ export class MeditationUsecase {
       );
     if (!meditation) throw new Error("Meditation not found");
     return meditation;
+  }
+
+  async getMeditationsBySubcategoryPaginated(
+    subcategoryId,
+    user,
+    limit,
+    page,
+    sort,
+    order,
+  ) {
+    if (!subcategoryId) {
+      throw new Error("subcategoryId is required");
+    }
+
+    return this.meditationRepository.getMeditationsBySubcategoryPaginated(
+      subcategoryId,
+      user?.id,
+      limit,
+      page,
+      sort,
+      order,
+    );
   }
 
   async getMeditationByCategoryId(id) {
@@ -152,7 +237,10 @@ export class MeditationUsecase {
   }
 
   async updateMeditationTime(id, data) {
-    return this.meditationWatchHistoryRepository.update(id, data);
+    return this.meditationWatchHistoryRepository.update(id, {
+      ...data,
+      watchedAt: new Date(),
+    });
   }
   async getWatchHistory(userId) {
     return this.meditationWatchHistoryRepository.findByUserId(userId);
@@ -164,5 +252,36 @@ export class MeditationUsecase {
 
   async getMeditationsByTagId(tagId, user) {
     return this.meditationRepository.findByTagId(tagId, user?.id);
+  }
+
+  async getRecentlyListenedMeditations(userId, limit = 5) {
+    if (!userId) {
+      throw new Error("User authentication required");
+    }
+
+    // Fetch a larger chunk and de-duplicate by meditation to get true "last N audios".
+    const histories =
+      await this.meditationWatchHistoryRepository.findRecentWithMeditation(
+        userId,
+        Math.max(limit * 3, limit),
+      );
+
+    const uniqueMeditations = [];
+    const seenMeditationIds = new Set();
+
+    for (const history of histories) {
+      const meditation = history?.meditation;
+      if (!meditation?.id || seenMeditationIds.has(meditation.id)) continue;
+
+      seenMeditationIds.add(meditation.id);
+      uniqueMeditations.push(meditation);
+
+      if (uniqueMeditations.length >= limit) break;
+    }
+
+    return uniqueMeditations.map((meditation) => ({
+      ...meditation,
+      duration: formatDurationToMMSS(meditation.duration),
+    }));
   }
 }
