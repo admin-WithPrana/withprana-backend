@@ -13,7 +13,7 @@ export class SubscriptionUseCases {
     this.sseService = sseService;
   }
 
-  async createSubscriptionCheckout(userId, planId) {
+  async createSubscriptionCheckout(userId, planId, options = {}) {
     try {
       const user = await this.userRepo.findById(userId);
       if (!user) {
@@ -46,13 +46,31 @@ export class SubscriptionUseCases {
         `[DEBUG] createSubscriptionCheckout: Plan ${plan.name} has trialDays: ${trialDays}`,
       );
 
+      const intervalLabel =
+        plan.intervalCount === 1 ? plan.interval : `${plan.interval}s`;
+      const trialLabel =
+        trialDays > 0 ? `Includes ${trialDays}-day free trial.` : "No trial.";
+      const recurringLabel = `Then billed ${plan.currency.toUpperCase()} ${plan.price} every ${plan.intervalCount} ${intervalLabel}.`;
+      const checkoutSummary = `${trialLabel} ${recurringLabel}`;
+
+      const fallbackSuccessUrl = `${process.env.FRONTEND_URL}/plans?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+      const fallbackCancelUrl = `${process.env.FRONTEND_URL}/plans?payment=cancel`;
+      const successUrl = this._sanitizeCheckoutReturnUrl(
+        options.successUrl,
+        fallbackSuccessUrl,
+      );
+      const cancelUrl = this._sanitizeCheckoutReturnUrl(
+        options.cancelUrl,
+        fallbackCancelUrl,
+      );
+
       const sessionConfig = {
         customer: customer.id,
         payment_method_collection: "always",
         payment_method_types: ["card"],
         mode: "subscription",
-        success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
         metadata: {
           userId: userId.toString(),
           planId: plan.id,
@@ -63,8 +81,11 @@ export class SubscriptionUseCases {
             price_data: {
               currency: plan.currency.toLowerCase(),
               product_data: {
-                name: plan.name,
-                description: `${plan.intervalCount} ${plan.interval}(s) subscription`,
+                name:
+                  plan.name +
+                  (trialDays > 0 ? ` (${trialDays}-day trial)` : ""),
+                description: checkoutSummary,
+                images: [`${process.env.FRONTEND_URL}/icons/logo.png`],
               },
               unit_amount: Math.round(plan.price * 100),
               recurring: {
@@ -81,6 +102,11 @@ export class SubscriptionUseCases {
             planId: plan.id,
           },
         },
+        custom_text: {
+          submit: {
+            message: `Plan: ${plan.name}. ${checkoutSummary} You can cancel anytime before renewal.`,
+          },
+        },
       };
 
       if (trialDays > 0) {
@@ -90,6 +116,7 @@ export class SubscriptionUseCases {
         // For trials, we charge a small amount to validate and remove the card, then refund.
         sessionConfig.mode = "payment";
         sessionConfig.currency = plan.currency.toLowerCase();
+        delete sessionConfig.payment_method_collection;
 
         // Remove subscription-specific fields
         delete sessionConfig.subscription_data;
@@ -100,15 +127,22 @@ export class SubscriptionUseCases {
             price_data: {
               currency: plan.currency.toLowerCase(),
               product_data: {
-                name: "Card Validation (Refundable)",
+                name: `${plan.name} trial verification`,
                 description:
-                  "A temporary charge to validate your card. This will be fully refunded immediately.",
+                  `Refundable verification charge to start your ${trialDays}-day trial. ${recurringLabel}`,
+                images: [`${process.env.FRONTEND_URL}/icons/logo.png`],
               },
               unit_amount: 100, // 1.00 unit (e.g., $1.00 or ₹1.00 if INR handles cents differently usually 100 paise)
             },
             quantity: 1,
           },
         ];
+
+        sessionConfig.custom_text = {
+          submit: {
+            message: `Starting ${trialDays}-day trial for ${plan.name}. A small refundable verification charge is taken now and refunded instantly.`,
+          },
+        };
 
         // IMPORTANT: Save the card for future use (the subscription)
         sessionConfig.payment_intent_data = {
@@ -158,6 +192,33 @@ export class SubscriptionUseCases {
     } catch (error) {
       console.error("Error in createSubscriptionCheckout:", error);
       throw new Error(`Failed to create payment session: ${error.message}`);
+    }
+  }
+
+  _sanitizeCheckoutReturnUrl(candidate, fallback) {
+    if (!candidate || typeof candidate !== "string") return fallback;
+
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        return fallback;
+      }
+
+      // Keep redirects on the same site family as configured frontend URL.
+      const configuredHost = new URL(process.env.FRONTEND_URL).hostname;
+      const candidateHost = parsed.hostname;
+      const isExactHost = candidateHost === configuredHost;
+      const isSubdomainOfConfigured = candidateHost.endsWith(
+        `.${configuredHost}`,
+      );
+
+      if (!isExactHost && !isSubdomainOfConfigured) {
+        return fallback;
+      }
+
+      return candidate;
+    } catch {
+      return fallback;
     }
   }
 
@@ -1447,16 +1508,6 @@ export class SubscriptionUseCases {
   }
 
   async getSubscriptionPlans(user, includeHidden = false) {
-    // Check if user has an active subscription
-    const result = await this.subscriptionRepo.isUserSubscribed(user.id);
-
-    if (result.isSubscribed) {
-      return {
-        isSubscribed: true,
-        subscription: result.subscription,
-      };
-    }
-
     return await this.subscriptionRepo.getAllSubscriptionPlans(includeHidden);
   }
 

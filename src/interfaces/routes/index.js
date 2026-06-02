@@ -8,7 +8,7 @@ import { tagsRoutes } from "./tagRoutes.js";
 import { likedRoutes } from "./likedRoutes.js";
 import { thoughtRoutes } from "./thoughOfTheDayRoute.js";
 import { playlistRoutes } from "./playListRoutes.js";
-import { policyRoutes } from "./privacyPolicyRoutes.js";
+import { policyRoutes, publicPolicyRoutes } from "./privacyPolicyRoutes.js";
 import { onboardingRoutes } from "./onBoardingRoutes.js";
 import { userTagsRoutes } from "./userTagRoutes.js";
 import { setupSubscriptionRoutes } from "./subscriptionRoutes.js";
@@ -122,9 +122,19 @@ export async function registerRoutes(app, deps) {
     postQueue: deps.postQueue,
   });
 
+  // Public GET — read terms & privacy policy without auth
+  app.register(
+    async function (policyPublicScope) {
+      publicPolicyRoutes(policyPublicScope, {
+        prismaRepository: deps.prismaRepository,
+      });
+    },
+    { prefix: "/api/privacy-policy" },
+  );
+
+  // Protected POST — create/update policies (admin only)
   registerProtectedRoute(app, "/api/privacy-policy", policyRoutes, {
     prismaRepository: deps.prismaRepository,
-    postQueue: deps.postQueue,
   });
 
   registerProtectedRoute(app, "/api/usertags", userTagsRoutes, {

@@ -29,6 +29,33 @@ export class MeditationWatchHistoryRepository {
         });
     }
 
+    async findRecentWithMeditation(userId, limit = 5, skip = 0) {
+        return this.prisma.meditationWatchHistory.findMany({
+            where: { userId },
+            orderBy: { watchedAt: 'desc' },
+            include: {
+                meditation: {
+                    include: {
+                        category: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                        subcategory: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                    },
+                },
+            },
+            take: limit,
+            skip,
+        });
+    }
+
     async update(id, data) {
         return this.prisma.meditationWatchHistory.update({
             where: { id },
@@ -36,7 +63,7 @@ export class MeditationWatchHistoryRepository {
         });
     }
 
-    async delete (id) {
+    async delete(id) {
         return this.prisma.meditationWatchHistory.delete({
             where: { id },
         });

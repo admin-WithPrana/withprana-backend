@@ -265,9 +265,15 @@ export const meditationRoutes = async (
   });
 
   app.get("/", (req, reply) => controller.getAll(req, reply));
+  app.get("/recently-listened", (req, reply) =>
+    controller.getRecentlyListened(req, reply),
+  );
   app.get("/:id", (req, reply) => controller.getById(req, reply));
   app.get("/subcategory", (req, reply) =>
     controller.getMeditationBySubCategoryId(req, reply),
+  );
+  app.get("/subcategory/paginated", (req, reply) =>
+    controller.getMeditationsBySubcategoryPaginated(req, reply),
   );
   app.get("/category", (req, reply) =>
     controller.getMeditationByCategoryId(req, reply),
@@ -280,6 +286,9 @@ export const meditationRoutes = async (
   );
   app.get("/tag/:id", (req, reply) =>
     controller.getMeditationsByTagId(req, reply),
+  );
+  app.post("/watch-time/start", (req, reply) =>
+    controller.startMeditationSession(req, reply),
   );
   app.put("/watch-time", (req, reply) =>
     controller.updateMeditationTime(req, reply),

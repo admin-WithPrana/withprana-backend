@@ -5,7 +5,13 @@ export class SARLogController {
     // Queue a SAR log for a user
     async createLog(request, reply) {
         try {
-            const { userId, status } = request.body;
+            const status = request.body?.status;
+            const userId = request.user?.id ?? request.user?._id ?? request.body?.userId;
+
+            if (!userId) {
+                return reply.status(400).send({ success: false, message: "User ID is required" });
+            }
+
             const result = await this.sarLogUseCases.createLog({ userId, status });
             reply.send(result);
         } catch (error) {

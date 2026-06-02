@@ -8,7 +8,7 @@ export class userTagsRepository {
 
   async updateUserSubscriptionType(userId, subscriptionType) {
     return await this.prisma.user.update({
-      where: { id: BigInt(userId) },
+      where: { id: userId },
       data: { subscriptionType },
     });
   }
@@ -23,19 +23,17 @@ export class userTagsRepository {
     }
 
     return await this.prisma.user.update({
-      where: { id: BigInt(userId) },
+      where: { id: userId },
       data: updateData,
     });
   }
 
   async addUserTags(userId, tagIds) {
     try {
-      const userIdBigInt = BigInt(userId);
-
       return await this.prisma.$transaction(async (tx) => {
         const existingUserTags = await tx.userTag.findMany({
           where: {
-            userId: userIdBigInt,
+            userId,
             tagId: { in: tagIds },
           },
           select: { tagId: true },
@@ -50,7 +48,7 @@ export class userTagsRepository {
         if (newTagIds.length === 0) {
           return await tx.userTag.findMany({
             where: {
-              userId: userIdBigInt,
+              userId,
               tagId: { in: tagIds },
             },
             include: {
@@ -61,8 +59,8 @@ export class userTagsRepository {
 
         // Create new user tags
         const userTagsData = newTagIds.map((tagId) => ({
-          userId: userIdBigInt,
-          tagId: tagId,
+          userId,
+          tagId,
         }));
 
         await tx.userTag.createMany({
@@ -73,7 +71,7 @@ export class userTagsRepository {
         // Return all user tags (both existing and new)
         return await tx.userTag.findMany({
           where: {
-            userId: userIdBigInt,
+            userId,
             tagId: { in: tagIds },
           },
           include: {
@@ -99,7 +97,7 @@ export class userTagsRepository {
 
   async getUserTags(userId, tagIds = null) {
     const whereClause = {
-      userId: BigInt(userId),
+      userId,
     };
 
     if (tagIds) {
@@ -115,11 +113,9 @@ export class userTagsRepository {
   }
 
   async removeUserTags(userId, tagIds) {
-    const userIdBigInt = BigInt(userId);
-
     return await this.prisma.userTag.deleteMany({
       where: {
-        userId: userIdBigInt,
+        userId,
         tagId: { in: tagIds },
       },
     });
@@ -127,9 +123,8 @@ export class userTagsRepository {
 
   async checkUserExists(userId) {
     try {
-      const userIdBigInt = BigInt(userId);
       const user = await this.prisma.user.findUnique({
-        where: { id: userIdBigInt },
+        where: { id: userId },
         select: { id: true },
       });
       return !!user;
