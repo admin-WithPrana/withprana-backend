@@ -17,7 +17,8 @@ export class UserUseCases {
     loginHistoryRepository,
     subscriptionRepo,
     qrRepo,
-    sseService
+    sseService,
+    stripeService
   ) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
@@ -26,6 +27,7 @@ export class UserUseCases {
     this.subscriptionRepository = subscriptionRepo;
     this.qrRepository = qrRepo;
     this.sseService = sseService;
+    this.stripeService = stripeService;
   }
 
   generateRefreshToken() {
@@ -87,6 +89,9 @@ export class UserUseCases {
     }
 
     if (existingUser) {
+      if (existingUser.isDeleted) {
+        throw new Error("This account has been deleted.");
+      }
       if (
         userData.oauth &&
         JSON.parse(userData.oauth) &&
@@ -108,6 +113,11 @@ export class UserUseCases {
 
     if (userData.oauth && JSON.parse(userData.oauth) == true) {
       if (existingUser) {
+        if (existingUser.deleteRequestedAt) {
+          await this.userRepository.cancelDeletionRequest(existingUser.id);
+          existingUser.deleteRequestedAt = null;
+        }
+
         if (existingUser.active === false) {
           if (existingUser.systemDeactivated) {
             await this.userRepository.reactivateUser(existingUser.id);
@@ -205,6 +215,10 @@ export class UserUseCases {
     });
 
     if (existingUser) {
+      if (existingUser.isDeleted) {
+        throw new Error("This account has been deleted.");
+      }
+
       if (existingUser.active === true) {
         throw new Error("This email is already registered. Please login");
       }
@@ -266,6 +280,10 @@ export class UserUseCases {
       throw new Error("OAuth users do not require OTP verification");
     }
 
+    if (user.isDeleted) {
+      throw new Error("This account has been deleted.");
+    }
+
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
@@ -289,6 +307,15 @@ export class UserUseCases {
 
     if (!user) {
       throw new Error("User not found");
+    }
+
+    if (user.isDeleted) {
+      throw new Error("This account has been deleted.");
+    }
+
+    if (user.deleteRequestedAt) {
+      await this.userRepository.cancelDeletionRequest(user.id);
+      user.deleteRequestedAt = null;
     }
 
     if (user.oauth === true) {
@@ -370,6 +397,15 @@ export class UserUseCases {
 
       if (!existingUser) {
         return { success: false, message: "No user found" };
+      }
+
+      if (existingUser.isDeleted) {
+        return { success: false, message: "This account has been deleted." };
+      }
+
+      if (existingUser.deleteRequestedAt) {
+        await this.userRepository.cancelDeletionRequest(existingUser.id);
+        existingUser.deleteRequestedAt = null;
       }
 
       if (existingUser.active === false) {
@@ -547,13 +583,32 @@ export class UserUseCases {
   async deleteUser(id) {
     const user = await this.userRepository.findById(id);
     if (user) {
-      // Send email before deleting (or after, but if deleted we might lose data if not careful. passed user obj is fine)
+      if (this.stripeService && user.stripeCustomerId) {
+        try {
+          // Check for active subscriptions in the database
+          const activeSub = await this.subscriptionRepository.findActiveSubscriptionByUserId(id);
+          if (activeSub && activeSub.stripeSubscriptionId) {
+            console.log(`[DEBUG] Canceling Stripe subscription ${activeSub.stripeSubscriptionId} for user ${id}`);
+            await this.stripeService.cancelSubscriptionImmediately(activeSub.stripeSubscriptionId);
+            
+            // Also update the local database status to canceled
+            await this.subscriptionRepository.updateSubscriptionStatus(
+              activeSub.stripeSubscriptionId,
+              "CANCELED"
+            );
+          }
+        } catch (error) {
+          console.error("Error canceling Stripe subscription during account deletion request:", error);
+          // Proceed with deletion request even if Stripe cancellation fails (to not block the user)
+        }
+      }
+
       await this.notificationService.sendAccountDeleteConfirmationEmail(
         this._decryptUser(user).email,
         this._decryptUser(user).name,
       );
     }
-    const deletedUser = await this.userRepository.deleteUser(id);
+    const deletedUser = await this.userRepository.requestAccountDeletion(id);
     return deletedUser;
   }
 

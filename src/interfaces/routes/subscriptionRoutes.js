@@ -141,6 +141,9 @@ export const setupSubscriptionRoutes = (
       protectedApp.get("/status", (req, res) =>
         subscriptionController.getSubscriptionStatus(req, res),
       );
+      protectedApp.post("/portal", (req, res) =>
+        subscriptionController.generateBillingPortal(req, res),
+      );
       protectedApp.post("/cancel", (req, res) =>
         subscriptionController.cancelSubscription(req, res),
       );

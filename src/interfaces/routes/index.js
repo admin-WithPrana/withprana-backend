@@ -70,6 +70,7 @@ export async function registerRoutes(app, deps) {
         prismaRepository: deps.prismaRepository,
         mailer: deps.mailer,
         sseService: deps.sseService,
+        stripeService: deps.stripeService,
       });
     },
     { prefix: "/api/user" },

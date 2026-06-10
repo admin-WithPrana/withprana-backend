@@ -20,6 +20,44 @@ export class StripeService {
     }
   }
 
+  async createProduct(name) {
+    try {
+      const product = await this.stripe.products.create({ name });
+      return product;
+    } catch (error) {
+      throw new Error(`Failed to create Stripe product: ${error.message}`);
+    }
+  }
+
+  async createPrice(productId, amount, currency, interval, intervalCount = 1) {
+    try {
+      const price = await this.stripe.prices.create({
+        product: productId,
+        unit_amount: Math.round(amount * 100),
+        currency: currency.toLowerCase(),
+        recurring: {
+          interval: interval.toLowerCase(),
+          interval_count: intervalCount,
+        },
+      });
+      return price;
+    } catch (error) {
+      throw new Error(`Failed to create Stripe price: ${error.message}`);
+    }
+  }
+
+  async createBillingPortalSession(customerId, returnUrl) {
+    try {
+      const session = await this.stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+      return session;
+    } catch (error) {
+      throw new Error(`Failed to create billing portal session: ${error.message}`);
+    }
+  }
+
   async createCustomer(user) {
     try {
       const customer = await this.stripe.customers.create({

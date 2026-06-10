@@ -142,4 +142,38 @@ export const initializeSubscriptionCron = (prisma) => {
       console.error("❌ Error during payment due check:", error);
     }
   });
+
+  // 4. Soft Delete Accounts Processing (Runs daily at 3 AM)
+  cron.schedule("0 3 * * *", async () => {
+    console.log("⏳ Running account deletion processor...");
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const usersToDelete = await prisma.user.findMany({
+        where: {
+          isDeleted: false,
+          deleteRequestedAt: {
+            lte: sevenDaysAgo,
+          },
+        },
+      });
+
+      console.log(`Processing ${usersToDelete.length} accounts for permanent soft-delete...`);
+
+      for (const user of usersToDelete) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            isDeleted: true,
+            active: false,
+            deleteRequestedAt: null, // Clear the request so it's fully marked deleted
+          },
+        });
+        console.log(`✅ Permanently soft-deleted user ${user.id}`);
+      }
+    } catch (error) {
+      console.error("❌ Error during account deletion processing:", error);
+    }
+  });
 };

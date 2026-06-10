@@ -10,7 +10,7 @@ import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
 import { QrRepository } from "../../infrastructure/databases/postgres/qrRepository.js";
 
-export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
+export const setupRoutes = (app, { prismaRepository, mailer, sseService, stripeService }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
     throw new Error("Prisma client is not properly initialized");
   }
@@ -31,7 +31,8 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
     loginHistoryRepository,
     subscriptionRepo,
     qrRepo,
-    sseService
+    sseService,
+    stripeService
   );
 
   app.register(fastifyMultipart, {
