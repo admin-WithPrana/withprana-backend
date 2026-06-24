@@ -252,6 +252,7 @@ export class SubscriptionUseCases {
     }
   }
 
+  /*
   async createAppSubscriptionCheckout(userId, planId) {
     try {
       console.log("Starting app checkout for user:", userId);
@@ -505,6 +506,144 @@ export class SubscriptionUseCases {
     } catch (error) {
       console.error("❌ Error in createAppSubscriptionCheckout:", error);
       throw new Error(`Failed to create mobile subscription: ${error.message}`);
+    }
+  }
+  */
+
+  async createAppSubscriptionCheckout(userId, planId) {
+    try {
+      console.log("Starting web checkout session for user:", userId);
+
+      const user = await this.userRepo.findById(userId);
+      if (!user) throw new Error("User not found");
+
+      const plan = await this.subscriptionRepo.findPlanById(planId);
+      if (!plan) throw new Error("Invalid subscription plan");
+
+      let trialDays = plan.trialDays ?? 7;
+
+      // Check if user has ever had a subscription to prevent multiple trials
+      const pastSubscription = await this.subscriptionRepo.getSubscriptionByUserId(userId);
+      if (pastSubscription) {
+        console.log(`[DEBUG] User ${userId} already had a subscription previously. Forfeiting trial days.`);
+        trialDays = 0;
+      }
+
+      console.log(
+        `[DEBUG] createAppSubscriptionCheckout: Plan ${plan.name} has trialDays: ${trialDays}`
+      );
+
+      // Check for active subscription
+      const activeSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(userId);
+      if (activeSubscription) throw new Error("User already has an active subscription");
+
+      // Create or get valid Stripe customer
+      const customer = await this.stripeService.createOrGetCustomer(user);
+
+      // ✅ UPDATE CUSTOMER WITH REQUIRED DETAILS FOR INDIAN EXPORTS
+      console.log("🔄 Updating customer with required billing details for Indian exports...");
+      await this.stripeService.stripe.customers.update(customer.id, {
+        name: user.name || "Customer", // REQUIRED: Customer name
+        address: {
+          line1: "123 Main Street",
+          city: "Mumbai", // REQUIRED: City
+          state: "Maharashtra", // REQUIRED: State
+          postal_code: "400001", // REQUIRED: Postal code
+          country: "IN", // REQUIRED: Country
+        },
+        // Also ensure email is set if not already
+        email: user.email,
+      });
+
+      console.log("✅ Customer updated with billing details:", {
+        name: user.name || "Customer",
+      });
+
+      // Update user with valid Stripe customer ID if changed
+      if (user.stripeCustomerId !== customer.id) {
+        await this.subscriptionRepo.updateUserStripeCustomerId(
+          userId,
+          customer.id
+        );
+        console.log("Updated user with new Stripe customer ID:", customer.id);
+      }
+
+      // Create proper description for Indian regulations
+      const description = `Meditation App Subscription: ${plan.name} - ${plan.intervalCount} ${plan.interval}(s) access`;
+
+      console.log(`Creating checkout session for user ${userId}`);
+
+      const sessionConfig = {
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        customer: customer.id,
+        // Update these URLs to match your frontend routes
+        success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-cancelled`,
+        metadata: {
+          userId: userId.toString(),
+          planId: plan.id,
+          type: "APP_SUBSCRIPTION_CHECKOUT",
+        },
+        subscription_data: {
+          metadata: {
+            userId: userId.toString(),
+            planId: plan.id,
+            type: "APP_SUBSCRIPTION",
+            planName: plan.name,
+            description: description,
+          }
+        }
+      };
+
+      if (trialDays > 0) {
+        sessionConfig.subscription_data.trial_period_days = trialDays;
+      }
+
+      if (plan.stripePriceId) {
+        sessionConfig.line_items = [
+          {
+            price: plan.stripePriceId,
+            quantity: 1,
+          },
+        ];
+      } else {
+        // Fallback for custom plan without stripePriceId
+        const product = await this.stripeService.stripe.products.create({
+          name: plan.name,
+          description: description,
+        });
+
+        sessionConfig.line_items = [
+          {
+            price_data: {
+              currency: plan.currency.toLowerCase(),
+              product: product.id,
+              unit_amount: Math.round(plan.price * 100),
+              recurring: {
+                interval: plan.interval,
+                interval_count: plan.intervalCount,
+              },
+            },
+            quantity: 1,
+          },
+        ];
+      }
+
+      const session = await this.stripeService.stripe.checkout.sessions.create(sessionConfig);
+
+      console.log("✅ Checkout Session created:", session.id);
+
+      return {
+        success: true,
+        url: session.url,
+        sessionId: session.id,
+        message: "Checkout session created successfully",
+      };
+
+    } catch (error) {
+      console.error("❌ Error in createAppSubscriptionCheckout (Session):", error);
+      throw new Error(`Failed to create checkout session: ${error.message}`);
     }
   }
 
@@ -1561,10 +1700,33 @@ export class SubscriptionUseCases {
         throw new Error("Subscription plan not found");
       }
 
-      const updatedPlan = await this.subscriptionRepo.updatePlan(
-        planId,
-        planData,
-      );
+      const updateData = { ...planData };
+
+      // If price, currency, interval, or intervalCount changes, we must create a new Stripe Price
+      // (Stripe Prices are immutable for these fields)
+      const priceChanged = updateData.price && updateData.price !== existingPlan.price;
+      const currencyChanged = updateData.currency && updateData.currency !== existingPlan.currency;
+      const intervalChanged = updateData.interval && updateData.interval !== existingPlan.interval;
+      const intervalCountChanged = updateData.intervalCount && updateData.intervalCount !== existingPlan.intervalCount;
+
+      if (priceChanged || currencyChanged || intervalChanged || intervalCountChanged) {
+        // We need a product ID. If existing plan doesn't have a product ID, we create a new product.
+        // Or to keep it simple, just create a new product for the new price since we don't store stripeProductId.
+        const stripeProduct = await this.stripeService.createProduct(updateData.name || existingPlan.name);
+
+        const stripePrice = await this.stripeService.createPrice(
+          stripeProduct.id,
+          updateData.price || existingPlan.price,
+          updateData.currency || existingPlan.currency || "usd",
+          updateData.interval || existingPlan.interval,
+          updateData.intervalCount || existingPlan.intervalCount || 1
+        );
+
+        updateData.stripePriceId = stripePrice.id;
+      }
+
+      const updatedPlan = await this.subscriptionRepo.updatePlan(planId, updateData);
+
       return updatedPlan;
     } catch (error) {
       throw new Error(`Failed to update subscription plan: ${error.message}`);
