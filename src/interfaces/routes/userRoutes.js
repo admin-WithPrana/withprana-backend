@@ -45,7 +45,7 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService, stripeS
 
   app.post("/register", async (request, reply) => {
     try {
-      const { name, email, profilePicture, oauth, method } = request.body;
+      const { profilePicture } = request.body;
       let profilePictureUrl = null;
 
       if (
@@ -61,18 +61,17 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService, stripeS
         profilePictureUrl = image[0];
       }
 
+      const getVal = (val) => (val && typeof val === "object" ? val.value : val);
+
       const payload = {
-        name: name && typeof name === "object" ? name.value : name,
-        email: email && typeof email === "object" ? email.value : email,
-        oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
-        method: method && typeof method === "object" ? method.value : method,
+        name: getVal(request.body.name),
+        email: getVal(request.body.email),
+        oauth: getVal(request.body.oauth),
+        method: getVal(request.body.method),
         image: profilePictureUrl,
-        device:
-          request.body.device &&
-          typeof request.body.device === "object" &&
-          request.body.device.value
-            ? request.body.device.value
-            : request.body.device,
+        device: getVal(request.body.device),
+        isLogin: getVal(request.body.isLogin),
+        idToken: getVal(request.body.idToken),
       };
 
       await userController.register({ ...request, body: payload }, reply);

@@ -1,5 +1,5 @@
 export class CreateUserDTO {
-  constructor({ name, email, image, oauth, method, device, isLogin }) {
+  constructor({ name, email, image, oauth, method, device, isLogin, idToken }) {
     this.name = name;
     this.email = email;
     this.image = image;
@@ -7,6 +7,7 @@ export class CreateUserDTO {
     this.method = method;
     this.device = device;
     this.isLogin = isLogin;
+    this.idToken = idToken;
   }
 }
 
