@@ -45,7 +45,7 @@ export class LikedController {
 
       await this.likedUsecase.dislikeMeditation(userId, meditationId);
 
-      return reply.send({ success: true, message: "Meditation disliked" });
+      return reply.send({ success: true, message: "Meditation removed from favourites" });
     } catch (error) {
       console.error("Error in dislikeMeditation:", error);
       return reply.status(500).send({
