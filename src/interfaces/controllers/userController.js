@@ -77,6 +77,7 @@ export class UserController {
         success: result.success,
         message: result.message,
         token: result.token,
+        refreshToken: result.refreshToken,
         oauth: result.oauth,
         register: result.register,
       });
