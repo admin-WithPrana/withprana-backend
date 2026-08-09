@@ -21,7 +21,9 @@ export class MeditationController {
         description,
         duration,
         link,
+        originalAudioKey,
         thumbnail,
+        appImg,
         isPremium,
         categoryId,
         subcategoryId,
@@ -37,7 +39,9 @@ export class MeditationController {
         description,
         duration: Number(duration),
         link,
+        originalAudioKey,
         thumbnail,
+        appImg,
         isPremium: isPremium === "true" || isPremium === true,
         categoryId: categoryId,
         subcategoryId: subcategoryId || null,
@@ -167,7 +171,9 @@ export class MeditationController {
   async updateMeditationTime(req, reply) {
     try {
       const { id, ...data } = req.body;
+      const user = req.user;
       const result = await this.meditationUsecase.updateMeditationTime(
+        user.id,
         id,
         data,
       );
@@ -198,6 +204,17 @@ export class MeditationController {
       reply.send(result);
     } catch (err) {
       reply.status(500).send({ message: err.message });
+    }
+  }
+
+  async getDownloadUrl(req, reply) {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+      const downloadUrl = await this.meditationUsecase.getDownloadUrl(id, user);
+      reply.send({ downloadUrl });
+    } catch (err) {
+      reply.status(400).send({ message: err.message });
     }
   }
 }

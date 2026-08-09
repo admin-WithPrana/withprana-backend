@@ -1,4 +1,6 @@
 import { pushQueue } from "../../config/bullmq.js";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export class MeditationUsecase {
   constructor(
@@ -16,7 +18,9 @@ export class MeditationUsecase {
     description,
     duration,
     link,
+    originalAudioKey,
     thumbnail,
+    appImg,
     isPremium = false,
     active = true,
     categoryId,
@@ -30,7 +34,9 @@ export class MeditationUsecase {
       description,
       duration: Number(duration),
       link,
+      originalAudioKey,
       thumbnail,
+      appImg,
       isPremium: Boolean(isPremium),
       active: Boolean(active),
       categoryId: categoryId,
@@ -151,8 +157,8 @@ export class MeditationUsecase {
     });
   }
 
-  async updateMeditationTime(id, data) {
-    return this.meditationWatchHistoryRepository.update(id, data);
+  async updateMeditationTime(userId, meditationId, data) {
+    return this.meditationWatchHistoryRepository.updateByUserAndMeditation(userId, meditationId, data);
   }
   async getWatchHistory(userId) {
     return this.meditationWatchHistoryRepository.findByUserId(userId);
@@ -164,5 +170,33 @@ export class MeditationUsecase {
 
   async getMeditationsByTagId(tagId, user) {
     return this.meditationRepository.findByTagId(tagId, user?.id);
+  }
+
+  async getDownloadUrl(id, user) {
+    if (!user) throw new Error("Unauthorized");
+    
+    const meditation = await this.meditationRepository.findById(id, user.id);
+    if (!meditation) throw new Error("Meditation not found");
+    
+    if (!meditation.originalAudioKey) {
+        throw new Error("No downloadable audio file available for this meditation.");
+    }
+
+    const s3 = new S3Client({
+      region: process.env.AWS_REGION || "ap-south-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: meditation.originalAudioKey,
+    });
+
+    // Generate URL valid for 5 minutes (300 seconds)
+    const signedUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
+    return signedUrl;
   }
 }

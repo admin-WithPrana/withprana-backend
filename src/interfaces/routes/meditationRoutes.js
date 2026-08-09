@@ -2,6 +2,7 @@ import { MeditationRepository } from "../../infrastructure/databases/postgres/me
 import { MeditationUsecase } from "../../domain/usecases/meditationUsecase.js";
 import { MeditationController } from "../controllers/meditationController.js";
 import fastifyMultipart from "@fastify/multipart";
+import sharp from "sharp";
 import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 import {
   convertToHLS,
@@ -48,13 +49,25 @@ export const meditationRoutes = async (
         type,
         tags,
         schedule,
+        appImg,
       } = req.body;
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
+      let appImgUrl = null;
+      let originalAudioKey = null;
 
       if (audioFile?.file) {
         const buffer = await audioFile.toBuffer();
+
+        const originalFileName = audioFile.filename || `original_audio_${Date.now()}.mp3`;
+        const originalFile = {
+            buffer: buffer,
+            originalname: originalFileName
+        };
+        await uploadToS3(originalFile, "audio");
+        originalAudioKey = `audio/${originalFileName}`;
+
         const { outputDir, manifestPath } = await convertToHLS(buffer);
         audioDir = outputDir;
 
@@ -76,9 +89,40 @@ export const meditationRoutes = async (
       }
 
       if (thumbnail?.file) {
-        thumbnailUrl = await uploadToS3(thumbnail, "images");
+        const originalBuffer = await thumbnail.toBuffer();
+        
+        // Upload original image
+        const originalFile = {
+          buffer: originalBuffer,
+          originalname: thumbnail.filename || 'thumbnail.jpg'
+        };
+        const uploadedOriginal = await uploadToS3(originalFile, "images");
+        thumbnailUrl = uploadedOriginal;
+        
+        // Resize and upload appImg
+        const resizedBuffer = await sharp(originalBuffer)
+          .resize({
+            width: 1000,
+            height: 1100,
+            fit: sharp.fit.contain,
+            background: { r: 255, g: 255, b: 255, alpha: 1 }
+          })
+          .webp({ quality: 80 })
+          .toBuffer();
+          
+        const resizedFile = {
+          buffer: resizedBuffer,
+          originalname: `appImg_${Date.now()}.webp`
+        };
+        const uploadedResized = await uploadToS3(resizedFile, "images");
+        appImgUrl = uploadedResized;
+
       } else if (typeof thumbnail === "string" && thumbnail.trim() !== "") {
         thumbnailUrl = thumbnail;
+      }
+      
+      if (typeof appImg === "string" && appImg.trim() !== "") {
+        appImgUrl = appImg;
       }
 
       let parsedTags = [];
@@ -134,7 +178,9 @@ export const meditationRoutes = async (
         categoryId:
           typeof categoryId === "object" ? categoryId.value : categoryId,
         link: audioFileUrl,
-        thumbnail: thumbnailUrl ? thumbnailUrl[0] : "",
+        originalAudioKey: originalAudioKey,
+        thumbnail: thumbnailUrl ? (Array.isArray(thumbnailUrl) ? thumbnailUrl[0] : thumbnailUrl) : "",
+        appImg: appImgUrl ? (Array.isArray(appImgUrl) ? appImgUrl[0] : appImgUrl) : null,
         isPremium:
           typeof isPremium === "object"
             ? isPremium.value === "true"
@@ -180,13 +226,25 @@ export const meditationRoutes = async (
         active,
         subcategoryId,
         type,
+        appImg,
       } = req.body;
 
       let audioFileUrl = null;
       let thumbnailUrl = null;
+      let appImgUrl = null;
+      let originalAudioKey = null;
 
       if (audioFile?.file) {
         const buffer = await audioFile.toBuffer();
+
+        const originalFileName = audioFile.filename || `original_audio_${Date.now()}.mp3`;
+        const originalFile = {
+            buffer: buffer,
+            originalname: originalFileName
+        };
+        await uploadToS3(originalFile, "audio");
+        originalAudioKey = `audio/${originalFileName}`;
+
         const { outputDir, manifestPath } = await convertToHLS(buffer);
         audioDir = outputDir;
 
@@ -200,9 +258,40 @@ export const meditationRoutes = async (
       }
 
       if (thumbnail?.file) {
-        thumbnailUrl = await uploadToS3(thumbnail, "images");
+        const originalBuffer = await thumbnail.toBuffer();
+        
+        // Upload original image
+        const originalFile = {
+          buffer: originalBuffer,
+          originalname: thumbnail.filename || 'thumbnail.jpg'
+        };
+        const uploadedOriginal = await uploadToS3(originalFile, "images");
+        thumbnailUrl = uploadedOriginal;
+        
+        // Resize and upload appImg
+        const resizedBuffer = await sharp(originalBuffer)
+          .resize({
+            width: 1000,
+            height: 1100,
+            fit: sharp.fit.contain,
+            background: { r: 255, g: 255, b: 255, alpha: 1 }
+          })
+          .webp({ quality: 80 })
+          .toBuffer();
+          
+        const resizedFile = {
+          buffer: resizedBuffer,
+          originalname: `appImg_${Date.now()}.webp`
+        };
+        const uploadedResized = await uploadToS3(resizedFile, "images");
+        appImgUrl = uploadedResized;
+
       } else if (typeof thumbnail === "string" && thumbnail.trim() !== "") {
         thumbnailUrl = thumbnail;
+      }
+
+      if (typeof appImg === "string" && appImg.trim() !== "") {
+        appImgUrl = appImg;
       }
 
       const updatePayload = {
@@ -237,7 +326,9 @@ export const meditationRoutes = async (
           type: typeof type === "object" ? type.value : type,
         }),
         ...(audioFileUrl && { link: audioFileUrl }),
-        ...(thumbnailUrl && { thumbnail: thumbnailUrl[0] }),
+        ...(originalAudioKey && { originalAudioKey: originalAudioKey }),
+        ...(thumbnailUrl && { thumbnail: Array.isArray(thumbnailUrl) ? thumbnailUrl[0] : thumbnailUrl }),
+        ...(appImgUrl && { appImg: Array.isArray(appImgUrl) ? appImgUrl[0] : appImgUrl }),
         ...(isPremium !== undefined && {
           isPremium:
             typeof isPremium === "object"
@@ -272,6 +363,7 @@ export const meditationRoutes = async (
   app.get("/category", (req, reply) =>
     controller.getMeditationByCategoryId(req, reply),
   );
+  app.get("/download/:id", (req, reply) => controller.getDownloadUrl(req, reply));
   app.delete("/:id", (req, reply) => controller.delete(req, reply));
 
   // Get meditations by the current user's selected tags

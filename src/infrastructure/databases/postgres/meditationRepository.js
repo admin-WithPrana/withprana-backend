@@ -44,6 +44,8 @@ export class MeditationRepository {
         duration: data.duration,
         link: data.link,
         thumbnail: data.thumbnail,
+        appImg: data.appImg,
+        originalAudioKey: data.originalAudioKey,
         isPremium: data.isPremium,
         type: data?.type,
         scheduledAt: data?.scheduledAt,

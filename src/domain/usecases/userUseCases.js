@@ -74,9 +74,13 @@ export class UserUseCases {
       throw new Error("Google OAuth ID Token is required");
     }
     try {
+      // Dynamically extract the audience (client ID) from the token so it works for iOS/Android/Web
+      const decodedToken = jwt.decode(idToken);
+      const tokenAudience = decodedToken ? decodedToken.aud : process.env.GOOGLE_CLIENT_ID;
+
       const ticket = await googleClient.verifyIdToken({
         idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
+        audience: tokenAudience,
       });
       return ticket.getPayload();
     } catch (error) {

@@ -71,7 +71,7 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService, stripeS
         image: profilePictureUrl,
         device: getVal(request.body.device),
         isLogin: getVal(request.body.isLogin),
-        idToken: getVal(request.body.idToken),
+        idToken: getVal(request.body.idToken) || getVal(request.body.token),
       };
 
       await userController.register({ ...request, body: payload }, reply);
@@ -125,11 +125,13 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService, stripeS
           if (profilePicture?.file) {
             let image = await uploadToS3(profilePicture, "images");
             profilePictureUrl = image[0];
-          } else if (
-            typeof profilePicture === "string" &&
-            profilePicture.trim() !== ""
-          ) {
-            profilePictureUrl = profilePicture;
+          } else {
+            const val = typeof profilePicture === "object" ? profilePicture.value : profilePicture;
+            if (val === "null" || val === null || val === "") {
+              profilePictureUrl = null;
+            } else if (typeof val === "string" && val.trim() !== "") {
+              profilePictureUrl = val;
+            }
           }
         }
 
@@ -137,7 +139,7 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService, stripeS
           name: typeof name === "object" ? name.value : name,
         };
 
-        if (profilePictureUrl !== "") {
+        if (profilePictureUrl !== undefined && profilePictureUrl !== "") {
           payload.image = profilePictureUrl;
         }
 
