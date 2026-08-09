@@ -118,12 +118,23 @@ export class MeditationRepository {
     return meditation;
   }
 
+  async findByTitle(title) {
+    await this.ensurePrisma();
+    return this.prisma.meditation.findFirst({
+      where: {
+        title: {
+          equals: title,
+          mode: 'insensitive',
+        },
+        isDeleted: false,
+      },
+    });
+  }
+
   async getMeditationBySubCategoryId(id, userId) {
     await this.ensurePrisma();
 
     const include = {
-      // Add default includes if consistent with other methods, or keep minimal if that was intended
-      // Original code didn't have includes, keeping it simple but adding likedUsers if needed
     };
 
     if (userId) {

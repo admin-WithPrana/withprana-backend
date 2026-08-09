@@ -29,6 +29,11 @@ export class MeditationUsecase {
     tags,
     scheduledAt,
   }) {
+    const existingMeditation = await this.meditationRepository.findByTitle(title);
+    if (existingMeditation) {
+      throw new Error("Meditation with this title already exists");
+    }
+
     const meditation = await this.meditationRepository.create({
       title,
       description,
@@ -127,6 +132,14 @@ export class MeditationUsecase {
 
   async updateMeditation(id, data) {
     await this.getMeditationById(id);
+    
+    if (data.title) {
+      const existingMeditation = await this.meditationRepository.findByTitle(data.title);
+      if (existingMeditation && existingMeditation.id !== id) {
+        throw new Error("Meditation with this title already exists");
+      }
+    }
+
     return this.meditationRepository.update(id, data);
   }
 
