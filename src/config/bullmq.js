@@ -44,6 +44,15 @@ export const pushWorker = new Worker(
         imageUrl,
         sendToAllSubscribed: true
       });
+      
+      // Scalable O(1) broadcast save!
+      await prisma.globalNotification.create({
+        data: {
+          title: title || "New Notification",
+          message: message || "",
+          imageUrl: imageUrl || null
+        }
+      });
     } else {
       // Chunked delivery using customer database IDs
       const batchSize = 10000;
@@ -113,7 +122,7 @@ export const meditationWorker = new Worker(
       title: "New Meditation Released!",
       message: `"${updatedMeditation.title}" is now available to listen to.`,
       imageUrl: updatedMeditation.thumbnail,
-      sendToAllSubscribed: false // Passing false triggers the massive DB batching chunking loop you configured
+      sendToAllSubscribed: true // Broadcast globally via push provider and save a single GlobalNotification
     });
   },
   { connection, skipConfigCheck: true },

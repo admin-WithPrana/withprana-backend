@@ -6,9 +6,9 @@ export class NotificationController {
   async getMyNotifications(req, reply) {
     try {
       const userId = req.user.id || req.user._id;
-      const { page = 1, limit = 20 } = req.query;
+      const { cursor, limit = 20 } = req.query;
       
-      const result = await this.notificationUsecase.getUserNotifications(userId, { page, limit });
+      const result = await this.notificationUsecase.getUserNotifications(userId, { cursor, limit });
       reply.send(result);
     } catch (error) {
       console.error("Error in getMyNotifications details:", error);
@@ -51,6 +51,18 @@ export class NotificationController {
     } catch (error) {
       console.error("Error in deleteNotification details:", error);
       reply.status(500).send({ error: "Failed to delete notification" });
+    }
+  }
+
+  async clearAllNotifications(req, reply) {
+    try {
+      const userId = req.user.id || req.user._id;
+      
+      await this.notificationUsecase.clearAll(userId);
+      reply.send({ success: true, message: "All notifications cleared successfully" });
+    } catch (error) {
+      console.error("Error in clearAllNotifications details:", error);
+      reply.status(500).send({ error: "Failed to clear notifications" });
     }
   }
 }

@@ -11,4 +11,5 @@ export const notificationRoutes = async (app, { prismaRepository }) => {
   app.patch("/view-all", (req, reply) => controller.markAllAsViewed(req, reply));
   app.patch("/:id/view", (req, reply) => controller.markAsViewed(req, reply));
   app.delete("/:id", (req, reply) => controller.deleteNotification(req, reply));
+  app.delete("/", (req, reply) => controller.clearAllNotifications(req, reply));
 };

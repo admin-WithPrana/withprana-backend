@@ -77,6 +77,8 @@ model User {
   transactions            Transaction[]
   loginLogs               UserLoginLog?
   userTags                UserTag[]
+  notificationsClearedAt  DateTime?                @map("notifications_cleared_at")
+  deletedGlobalNotifications UserDeletedGlobalNotification[]
 
   @@map("users")
 }
@@ -460,10 +462,35 @@ model Notification {
   imageUrl  String?
   viewed    Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
+  isDeleted Boolean  @default(false) @map("is_deleted")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+model GlobalNotification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  imageUrl  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  deletedBy UserDeletedGlobalNotification[]
+
+  @@map("global_notifications")
+}
+
+model UserDeletedGlobalNotification {
+  userId               String
+  globalNotificationId String
+  deletedAt            DateTime @default(now()) @map("deleted_at")
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  globalNotification GlobalNotification @relation(fields: [globalNotificationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, globalNotificationId])
+  @@map("user_deleted_global_notifications")
 }
 
 model QrSession {

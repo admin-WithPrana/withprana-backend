@@ -18,4 +18,8 @@ export class NotificationUsecase {
   async deleteNotification(id, userId) {
     return await this.notificationRepository.deleteOne(id, userId);
   }
+
+  async clearAll(userId) {
+    return await this.notificationRepository.clearAll(userId);
+  }
 }
