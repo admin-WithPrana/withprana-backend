@@ -10,7 +10,7 @@ import { uploadToS3 } from "../../infrastructure/services/uploadToS3.js";
 import { SubscriptionRepository } from "../../infrastructure/databases/postgres/SubscriptionRepository.js";
 import { QrRepository } from "../../infrastructure/databases/postgres/qrRepository.js";
 
-export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
+export const setupRoutes = (app, { prismaRepository, mailer, sseService, stripeService }) => {
   if (!prismaRepository || !prismaRepository.prisma) {
     throw new Error("Prisma client is not properly initialized");
   }
@@ -31,7 +31,8 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
     loginHistoryRepository,
     subscriptionRepo,
     qrRepo,
-    sseService
+    sseService,
+    stripeService
   );
 
   app.register(fastifyMultipart, {
@@ -44,7 +45,7 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
 
   app.post("/register", async (request, reply) => {
     try {
-      const { name, email, profilePicture, oauth, method } = request.body;
+      const { profilePicture } = request.body;
       let profilePictureUrl = null;
 
       if (
@@ -60,18 +61,17 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
         profilePictureUrl = image[0];
       }
 
+      const getVal = (val) => (val && typeof val === "object" ? val.value : val);
+
       const payload = {
-        name: name && typeof name === "object" ? name.value : name,
-        email: email && typeof email === "object" ? email.value : email,
-        oauth: oauth && typeof oauth === "object" ? oauth.value : oauth,
-        method: method && typeof method === "object" ? method.value : method,
+        name: getVal(request.body.name),
+        email: getVal(request.body.email),
+        oauth: getVal(request.body.oauth),
+        method: getVal(request.body.method),
         image: profilePictureUrl,
-        device:
-          request.body.device &&
-          typeof request.body.device === "object" &&
-          request.body.device.value
-            ? request.body.device.value
-            : request.body.device,
+        device: getVal(request.body.device),
+        isLogin: getVal(request.body.isLogin),
+        idToken: getVal(request.body.idToken) || getVal(request.body.token),
       };
 
       await userController.register({ ...request, body: payload }, reply);
@@ -125,11 +125,13 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
           if (profilePicture?.file) {
             let image = await uploadToS3(profilePicture, "images");
             profilePictureUrl = image[0];
-          } else if (
-            typeof profilePicture === "string" &&
-            profilePicture.trim() !== ""
-          ) {
-            profilePictureUrl = profilePicture;
+          } else {
+            const val = typeof profilePicture === "object" ? profilePicture.value : profilePicture;
+            if (val === "null" || val === null || val === "") {
+              profilePictureUrl = null;
+            } else if (typeof val === "string" && val.trim() !== "") {
+              profilePictureUrl = val;
+            }
           }
         }
 
@@ -137,7 +139,7 @@ export const setupRoutes = (app, { prismaRepository, mailer, sseService }) => {
           name: typeof name === "object" ? name.value : name,
         };
 
-        if (profilePictureUrl !== "") {
+        if (profilePictureUrl !== undefined && profilePictureUrl !== "") {
           payload.image = profilePictureUrl;
         }
 

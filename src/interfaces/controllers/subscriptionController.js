@@ -156,6 +156,17 @@ export class SubscriptionController {
     }
   }
 
+  async generateBillingPortal(request, reply) {
+    try {
+      const userId = request.user.id;
+      const { returnUrl } = request.body || {};
+      const url = await this.subscriptionUseCases.generateBillingPortalLink(userId, returnUrl);
+      return reply.code(200).send({ success: true, url });
+    } catch (error) {
+      return reply.code(400).send({ success: false, message: error.message });
+    }
+  }
+
   async getTransactionHistory(request, reply) {
     try {
       const userId = request.user.id;

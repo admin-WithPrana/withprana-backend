@@ -306,6 +306,36 @@ export class PrismaUserRepository {
       throw error;
     }
   }
+  async requestAccountDeletion(id) {
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: id },
+        data: {
+          deleteRequestedAt: new Date(),
+        },
+      });
+      return this._decryptUser(user);
+    } catch (error) {
+      console.error("Error requesting account deletion:", error);
+      throw error;
+    }
+  }
+
+  async cancelDeletionRequest(id) {
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: id },
+        data: {
+          deleteRequestedAt: null,
+        },
+      });
+      return this._decryptUser(user);
+    } catch (error) {
+      console.error("Error canceling account deletion request:", error);
+      throw error;
+    }
+  }
+
   async deleteUser(id) {
     try {
       // Prisma handles cascading deletes based on schema relation modes

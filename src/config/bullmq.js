@@ -11,7 +11,7 @@ const connection = new IORedis({
 });
 
 // ----------------- Thought Queue -----------------
-export const thoughtQueue = new Queue("thoughtOfTheDayQueue", { connection });
+export const thoughtQueue = new Queue("thoughtOfTheDayQueue", { connection, skipConfigCheck: true });
 export const thoughtWorker = new Worker(
   "thoughtOfTheDayQueue",
   async (job) => {
@@ -21,7 +21,7 @@ export const thoughtWorker = new Worker(
       data: { status: "POSTED" },
     });
   },
-  { connection },
+  { connection, skipConfigCheck: true },
 );
 thoughtWorker.on("failed", (job, err) => {
   console.error(`Thought job failed ${job.id} with error: ${err.message}`);
@@ -30,7 +30,7 @@ thoughtWorker.on("failed", (job, err) => {
 // ----------------- Push Notification Queue -----------------
 import pushNotificationService from "../infrastructure/services/pushNotificationService.js";
 
-export const pushQueue = new Queue("pushNotificationQueue", { connection });
+export const pushQueue = new Queue("pushNotificationQueue", { connection, skipConfigCheck: true });
 export const pushWorker = new Worker(
   "pushNotificationQueue",
   async (job) => {
@@ -43,6 +43,15 @@ export const pushWorker = new Worker(
         message,
         imageUrl,
         sendToAllSubscribed: true
+      });
+      
+      // Scalable O(1) broadcast save!
+      await prisma.globalNotification.create({
+        data: {
+          title: title || "New Notification",
+          message: message || "",
+          imageUrl: imageUrl || null
+        }
       });
     } else {
       // Chunked delivery using customer database IDs
@@ -89,7 +98,7 @@ export const pushWorker = new Worker(
       }
     }
   },
-  { connection },
+  { connection, skipConfigCheck: true },
 );
 
 pushWorker.on("failed", (job, err) => {
@@ -97,7 +106,7 @@ pushWorker.on("failed", (job, err) => {
 });
 
 // ----------------- Meditation Queue -----------------
-export const meditationQueue = new Queue("meditationQueue", { connection });
+export const meditationQueue = new Queue("meditationQueue", { connection, skipConfigCheck: true });
 export const meditationWorker = new Worker(
   "meditationQueue",
   async (job) => {
@@ -113,10 +122,10 @@ export const meditationWorker = new Worker(
       title: "New Meditation Released!",
       message: `"${updatedMeditation.title}" is now available to listen to.`,
       imageUrl: updatedMeditation.thumbnail,
-      sendToAllSubscribed: false // Passing false triggers the massive DB batching chunking loop you configured
+      sendToAllSubscribed: true // Broadcast globally via push provider and save a single GlobalNotification
     });
   },
-  { connection },
+  { connection, skipConfigCheck: true },
 );
 meditationWorker.on("failed", (job, err) => {
   console.error(`Meditation job failed ${job.id} with error: ${err.message}`);
@@ -126,21 +135,21 @@ meditationWorker.on("failed", (job, err) => {
 import { InactivityService } from "../infrastructure/services/inactivityService.js";
 import { generateAndUploadLogsPDF } from "../utils/generateSSRLogs.js";
 const inactivityService = new InactivityService();
-export const inactivityQueue = new Queue("inactivityQueue", { connection });
+export const inactivityQueue = new Queue("inactivityQueue", { connection, skipConfigCheck: true });
 export const inactivityWorker = new Worker(
   "inactivityQueue",
   async (job) => {
     console.log("Checking inactivity...");
     await inactivityService.checkInactivity();
   },
-  { connection },
+  { connection, skipConfigCheck: true },
 );
 inactivityWorker.on("failed", (job, err) => {
   console.error(`Inactivity job failed ${job.id} with error: ${err.message}`);
 });
 
 // ----------------- SAR Log Queue -----------------
-export const sarLogQueue = new Queue("createSARLog", { connection });
+export const sarLogQueue = new Queue("createSARLog", { connection, skipConfigCheck: true });
 export const sarLogWorker = new Worker(
   "createSARLog",
   async (job) => {
@@ -155,7 +164,7 @@ export const sarLogWorker = new Worker(
       }
     })
   },
-  { connection }
+  { connection, skipConfigCheck: true }
 );
 
 sarLogWorker.on("failed", (job, err) => {

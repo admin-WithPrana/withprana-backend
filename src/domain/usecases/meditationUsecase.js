@@ -1,4 +1,6 @@
 import { pushQueue } from "../../config/bullmq.js";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function formatDurationToMMSS(value) {
   if (value === null || value === undefined) return "00:00";
@@ -50,7 +52,9 @@ export class MeditationUsecase {
     description,
     duration,
     link,
+    originalAudioKey,
     thumbnail,
+    appImg,
     isPremium = false,
     active = true,
     categoryId,
@@ -59,12 +63,19 @@ export class MeditationUsecase {
     tags,
     scheduledAt,
   }) {
+    const existingMeditation = await this.meditationRepository.findByTitle(title);
+    if (existingMeditation) {
+      throw new Error("Meditation with this title already exists");
+    }
+
     const meditation = await this.meditationRepository.create({
       title,
       description,
       duration: Number(duration),
       link,
+      originalAudioKey,
       thumbnail,
+      appImg,
       isPremium: Boolean(isPremium),
       active: Boolean(active),
       categoryId: categoryId,
@@ -206,6 +217,14 @@ export class MeditationUsecase {
 
   async updateMeditation(id, data) {
     await this.getMeditationById(id);
+    
+    if (data.title) {
+      const existingMeditation = await this.meditationRepository.findByTitle(data.title);
+      if (existingMeditation && existingMeditation.id !== id) {
+        throw new Error("Meditation with this title already exists");
+      }
+    }
+
     return this.meditationRepository.update(id, data);
   }
 
@@ -236,11 +255,8 @@ export class MeditationUsecase {
     });
   }
 
-  async updateMeditationTime(id, data) {
-    return this.meditationWatchHistoryRepository.update(id, {
-      ...data,
-      watchedAt: new Date(),
-    });
+  async updateMeditationTime(userId, meditationId, data) {
+    return this.meditationWatchHistoryRepository.updateByUserAndMeditation(userId, meditationId, data);
   }
   async getWatchHistory(userId) {
     return this.meditationWatchHistoryRepository.findByUserId(userId);
@@ -259,7 +275,7 @@ export class MeditationUsecase {
       throw new Error("User authentication required");
     }
 
-    // Fetch a larger chunk and de-duplicate by meditation to get true "last N audios".
+
     const histories =
       await this.meditationWatchHistoryRepository.findRecentWithMeditation(
         userId,
@@ -283,5 +299,32 @@ export class MeditationUsecase {
       ...meditation,
       duration: formatDurationToMMSS(meditation.duration),
     }));
+  }
+    
+  async getDownloadUrl(id, user) {
+    if (!user) throw new Error("Unauthorized");
+    
+    const meditation = await this.meditationRepository.findById(id, user.id);
+    if (!meditation) throw new Error("Meditation not found");
+    
+    if (!meditation.originalAudioKey) {
+        throw new Error("No downloadable audio file available for this meditation.");
+    }
+
+    const s3 = new S3Client({
+      region: process.env.AWS_REGION || "ap-south-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: meditation.originalAudioKey,
+    });
+
+    const signedUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
+    return signedUrl;
   }
 }

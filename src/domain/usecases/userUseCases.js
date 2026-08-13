@@ -1,6 +1,7 @@
 import { User, OTP } from "../entities/user.js";
 import jwt from "jsonwebtoken";
-import crypto from "crypto"; // For random token generation
+import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import { hashToken } from "../../utils/tokenUtils.js";
 import {
   encrypt,
@@ -8,6 +9,8 @@ import {
   encryptDeterministic,
   decryptDeterministic,
 } from "../../utils/encryption.js";
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export class UserUseCases {
   constructor(
@@ -17,7 +20,8 @@ export class UserUseCases {
     loginHistoryRepository,
     subscriptionRepo,
     qrRepo,
-    sseService
+    sseService,
+    stripeService
   ) {
     this.userRepository = userRepo;
     this.otpRepository = otpRepository;
@@ -26,6 +30,7 @@ export class UserUseCases {
     this.subscriptionRepository = subscriptionRepo;
     this.qrRepository = qrRepo;
     this.sseService = sseService;
+    this.stripeService = stripeService;
   }
 
   generateRefreshToken() {
@@ -64,14 +69,51 @@ export class UserUseCases {
     return decrypted;
   }
 
+  async verifyGoogleToken(idToken) {
+    if (!idToken) {
+      throw new Error("Google OAuth ID Token is required");
+    }
+    try {
+      // Dynamically extract the audience (client ID) from the token so it works for iOS/Android/Web
+      const decodedToken = jwt.decode(idToken);
+      const tokenAudience = decodedToken ? decodedToken.aud : process.env.GOOGLE_CLIENT_ID;
+
+      const ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: tokenAudience,
+      });
+      return ticket.getPayload();
+    } catch (error) {
+      console.error("Google token verification failed:", error);
+      throw new Error("Invalid Google OAuth ID Token");
+    }
+  }
+
   async registerUser(userData, device, ip) {
     console.log("DEBUG: registerUser started for email:", userData.email);
+
+    const isOauth = userData.oauth === true || userData.oauth === "true";
+    const signupMethod = this.signupSelector(Number(userData.method));
+
+    if (isOauth) {
+      if (signupMethod === "google") {
+        const payload = await this.verifyGoogleToken(userData.idToken);
+        if (payload.email.toLowerCase() !== userData.email.toLowerCase()) {
+          throw new Error("Google email does not match requested email");
+        }
+      } else if (signupMethod === "apple") {
+        if (!userData.idToken) {
+          throw new Error("Apple Identity Token is required");
+        }
+      }
+    }
+
     const user = new User({
       email: userData.email.toLowerCase(),
       name: userData.name,
       image: userData.image,
-      oauth: userData.oauth,
-      signupMethod: this.signupSelector(Number(userData.method)),
+      oauth: isOauth,
+      signupMethod,
       subscriptionType: "Free",
     });
 
@@ -81,35 +123,41 @@ export class UserUseCases {
     let existingUser = await this.userRepository.findByEmail(encryptedEmail);
     if (existingUser) existingUser = this._decryptUser(existingUser);
 
-    // New Logic: If isLogin is true (Sign In), strict check for existing user.
-    if (userData.oauth && userData.isLogin === true && !existingUser) {
+    const isLogin = userData.isLogin === true || userData.isLogin === "true";
+
+    if (isOauth && isLogin && !existingUser) {
       throw new Error("User not found. Please sign up.");
     }
 
     if (existingUser) {
-      if (
-        userData.oauth &&
-        JSON.parse(userData.oauth) &&
-        existingUser.signupMethod === "email" &&
-        existingUser.active !== true
-      ) {
-        throw new Error("This email is already registered. Please login");
+      if (existingUser.isDeleted) {
+        throw new Error("This account has been deleted.");
       }
-      if (
-        (!userData.oauth || !JSON.parse(userData.oauth)) &&
-        existingUser.signupMethod !== "email" &&
-        existingUser.active !== true
-      ) {
-        throw new Error(
-          "This email is already registered with OAuth. Please login with OAuth.",
-        );
+
+      if (existingUser.active === true) {
+        if (!isOauth) {
+          if (existingUser.signupMethod === "email") {
+            throw new Error("This email is already registered. Please login");
+          } else {
+            throw new Error(
+              `This email is already registered with ${existingUser.signupMethod}. Please login with OAuth.`
+            );
+          }
+        }
       }
     }
 
-    if (userData.oauth && JSON.parse(userData.oauth) == true) {
+    if (isOauth) {
       if (existingUser) {
+        if (existingUser.deleteRequestedAt) {
+          await this.userRepository.cancelDeletionRequest(existingUser.id);
+          existingUser.deleteRequestedAt = null;
+        }
+
         if (existingUser.active === false) {
-          if (existingUser.systemDeactivated) {
+          if (existingUser.isVerified === false) {
+            await this.userRepository.verifyEmail(encryptedEmail);
+          } else if (existingUser.systemDeactivated) {
             await this.userRepository.reactivateUser(existingUser.id);
           } else {
             throw new Error("Login blocked by admin");
@@ -117,13 +165,14 @@ export class UserUseCases {
         }
 
         const updateData = {
-          signupMethod: this.signupSelector(Number(userData.method)),
+          signupMethod: signupMethod,
         };
 
         if (!existingUser.active) {
           updateData.name = userData.name ? userData.name : undefined;
           updateData.image = userData.image;
         }
+
         Object.keys(updateData).forEach(
           (key) => updateData[key] === undefined && delete updateData[key],
         );
@@ -133,12 +182,7 @@ export class UserUseCases {
           updateData,
         );
         updatedUser = this._decryptUser(updatedUser);
-        console.log(
-          "DEBUG: About to call updateLastLogin with id:",
-          updatedUser.id,
-        );
         await this.userRepository.updateLastLogin(updatedUser.id);
-        console.log("DEBUG: updateLastLogin completed");
 
         const { token, loginHistory } = await this.generateToken(
           updatedUser,
@@ -180,7 +224,6 @@ export class UserUseCases {
       const refreshToken = this.generateRefreshToken();
       await this.storeRefreshToken(createdUser, refreshToken);
 
-      // Send Welcome Email
       await this.notificationService.sendWelcomeEmail(createdUser);
 
       return {
@@ -205,6 +248,10 @@ export class UserUseCases {
     });
 
     if (existingUser) {
+      if (existingUser.isDeleted) {
+        throw new Error("This account has been deleted.");
+      }
+
       if (existingUser.active === true) {
         throw new Error("This email is already registered. Please login");
       }
@@ -266,6 +313,10 @@ export class UserUseCases {
       throw new Error("OAuth users do not require OTP verification");
     }
 
+    if (user.isDeleted) {
+      throw new Error("This account has been deleted.");
+    }
+
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
@@ -289,6 +340,15 @@ export class UserUseCases {
 
     if (!user) {
       throw new Error("User not found");
+    }
+
+    if (user.isDeleted) {
+      throw new Error("This account has been deleted.");
+    }
+
+    if (user.deleteRequestedAt) {
+      await this.userRepository.cancelDeletionRequest(user.id);
+      user.deleteRequestedAt = null;
     }
 
     if (user.oauth === true) {
@@ -372,6 +432,15 @@ export class UserUseCases {
         return { success: false, message: "No user found" };
       }
 
+      if (existingUser.isDeleted) {
+        return { success: false, message: "This account has been deleted." };
+      }
+
+      if (existingUser.deleteRequestedAt) {
+        await this.userRepository.cancelDeletionRequest(existingUser.id);
+        existingUser.deleteRequestedAt = null;
+      }
+
       if (existingUser.active === false) {
         if (existingUser.systemDeactivated) {
           await this.userRepository.reactivateUser(existingUser.id);
@@ -426,14 +495,26 @@ export class UserUseCases {
     }
   }
 
-  async generateToken(user, device, ip, expiresIn = "1d") {
-    const loginHistory = await this.loginHistoryRepository.create({
-      userId: user.id,
-      role: "USER",
-      ipAddress: ip || "",
-      device: device || null,
-      isActive: true,
-    });
+  async generateToken(user, device, ip, expiresIn = "1d", sessionId = null) {
+    let finalSessionId = sessionId;
+    let loginHistory = null;
+
+    if (!finalSessionId) {
+      const activeHistories = await this.loginHistoryRepository.findActiveByUserId(user.id);
+      if (activeHistories && activeHistories.length > 0 && !device && !ip) {
+        loginHistory = activeHistories[0];
+        finalSessionId = loginHistory.id;
+      } else {
+        loginHistory = await this.loginHistoryRepository.create({
+          userId: user.id,
+          role: "USER",
+          ipAddress: ip || "",
+          device: device || null,
+          isActive: true,
+        });
+        finalSessionId = loginHistory.id;
+      }
+    }
 
     let isSubscribed = false;
     let subscriptionType = "Free";
@@ -445,10 +526,7 @@ export class UserUseCases {
         );
         if (subStatus.isSubscribed) {
           isSubscribed = true;
-          subscriptionType = "Premium"; // Or fetch from plan name: subStatus.subscription.plan.name
-          if (subStatus.subscription?.plan?.name) {
-            subscriptionType = subStatus.subscription.plan.name;
-          }
+          subscriptionType = subStatus.subscription?.plan?.name || "Premium";
         }
       } catch (err) {
         console.error(
@@ -464,7 +542,7 @@ export class UserUseCases {
         email: encryptDeterministic(user.email),
         name: user.name ? encrypt(user.name) : undefined,
         role: "USER",
-        sessionId: loginHistory.id,
+        sessionId: finalSessionId,
         isSubscribed: isSubscribed,
         subscriptionType: subscriptionType,
       },
@@ -547,13 +625,32 @@ export class UserUseCases {
   async deleteUser(id) {
     const user = await this.userRepository.findById(id);
     if (user) {
-      // Send email before deleting (or after, but if deleted we might lose data if not careful. passed user obj is fine)
+      if (this.stripeService && user.stripeCustomerId) {
+        try {
+          // Check for active subscriptions in the database
+          const activeSub = await this.subscriptionRepository.findActiveSubscriptionByUserId(id);
+          if (activeSub && activeSub.stripeSubscriptionId) {
+            console.log(`[DEBUG] Canceling Stripe subscription ${activeSub.stripeSubscriptionId} for user ${id}`);
+            await this.stripeService.cancelSubscriptionImmediately(activeSub.stripeSubscriptionId);
+            
+            // Also update the local database status to canceled
+            await this.subscriptionRepository.updateSubscriptionStatus(
+              activeSub.stripeSubscriptionId,
+              "CANCELED"
+            );
+          }
+        } catch (error) {
+          console.error("Error canceling Stripe subscription during account deletion request:", error);
+          // Proceed with deletion request even if Stripe cancellation fails (to not block the user)
+        }
+      }
+
       await this.notificationService.sendAccountDeleteConfirmationEmail(
         this._decryptUser(user).email,
         this._decryptUser(user).name,
       );
     }
-    const deletedUser = await this.userRepository.deleteUser(id);
+    const deletedUser = await this.userRepository.requestAccountDeletion(id);
     return deletedUser;
   }
 
@@ -580,7 +677,7 @@ export class UserUseCases {
 
     await this.userRepository.revokeRefreshToken(existingToken.id);
 
-    const newAccessToken = this.generateToken(decryptedUser);
+    const { token: newAccessToken } = await this.generateToken(decryptedUser);
     const newRefreshToken = this.generateRefreshToken();
     await this.storeRefreshToken(decryptedUser, newRefreshToken);
 

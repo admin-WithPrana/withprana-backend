@@ -9,7 +9,8 @@ export class UserController {
     loginHistoryRepository,
     subscriptionRepository,
     qrRepository,
-    sseService
+    sseService,
+    stripeService
   ) {
     this.userUseCases = new UserUseCases(
       userRepository,
@@ -18,7 +19,8 @@ export class UserController {
       loginHistoryRepository,
       subscriptionRepository,
       qrRepository,
-      sseService
+      sseService,
+      stripeService
     );
     this.sseService = sseService;
   }

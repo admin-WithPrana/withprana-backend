@@ -19,27 +19,55 @@ export class NotificationRepository {
     }
   }
 
-  async getByUserId(userId, { page = 1, limit = 20 } = {}) {
+  async getByUserId(userId, { cursor, limit = 20 } = {}) {
     try {
-      const skip = (page - 1) * limit;
-      const notifications = await this.prisma.notification.findMany({
-        where: { userId },
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { notificationsClearedAt: true }
+      });
+      
+      const clearedAt = user?.notificationsClearedAt || new Date(0);
+      const takeCount = parseInt(limit, 10);
+      const dateCursor = cursor ? new Date(cursor) : new Date();
+
+      const personalNotifications = await this.prisma.notification.findMany({
+        where: {
+          userId,
+          isDeleted: false,
+          createdAt: {
+            gt: clearedAt,
+            lt: dateCursor
+          }
+        },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit, 10),
+        take: takeCount,
       });
 
-      const total = await this.prisma.notification.count({
-        where: { userId }
+      const globalNotifications = await this.prisma.globalNotification.findMany({
+        where: {
+          createdAt: {
+            gt: clearedAt,
+            lt: dateCursor
+          },
+          deletedBy: {
+            none: { userId }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: takeCount,
       });
+
+      const merged = [...personalNotifications, ...globalNotifications]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, takeCount);
+
+      const nextCursor = merged.length > 0 ? merged[merged.length - 1].createdAt.toISOString() : null;
 
       return {
-        data: notifications,
+        data: merged,
         pagination: {
-          total,
-          page: parseInt(page, 10),
-          limit: parseInt(limit, 10),
-          totalPages: Math.ceil(total / limit),
+          nextCursor,
+          limit: takeCount
         }
       };
     } catch (error) {
@@ -76,13 +104,43 @@ export class NotificationRepository {
 
   async deleteOne(id, userId) {
     try {
-      // Using deleteMany to enforce userId ownership
-      const result = await this.prisma.notification.deleteMany({
+      const personal = await this.prisma.notification.findFirst({
         where: { id, userId }
       });
-      return result;
+      if (personal) {
+        return await this.prisma.notification.update({
+          where: { id },
+          data: { isDeleted: true, viewed: true }
+        });
+      }
+
+      const globalNote = await this.prisma.globalNotification.findUnique({
+        where: { id }
+      });
+      if (globalNote) {
+        return await this.prisma.userDeletedGlobalNotification.create({
+          data: {
+            userId,
+            globalNotificationId: id
+          }
+        });
+      }
+      
+      throw new Error("Notification not found");
     } catch (error) {
       console.error("Error deleting notification:", error);
+      throw error;
+    }
+  }
+
+  async clearAll(userId) {
+    try {
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: { notificationsClearedAt: new Date() }
+      });
+    } catch (error) {
+      console.error("Error clearing all notifications:", error);
       throw error;
     }
   }

@@ -41,7 +41,15 @@ export class SubscriptionUseCases {
         );
       }
 
-      const trialDays = plan.trialDays ?? 7;
+      let trialDays = plan.trialDays ?? 7;
+
+      // Check if user has ever had a subscription to prevent multiple trials
+      const pastSubscription = await this.subscriptionRepo.getSubscriptionByUserId(userId);
+      if (pastSubscription) {
+        console.log(`[DEBUG] User ${userId} already had a subscription previously. Forfeiting trial days.`);
+        trialDays = 0;
+      }
+
       console.log(
         `[DEBUG] createSubscriptionCheckout: Plan ${plan.name} has trialDays: ${trialDays}`,
       );
@@ -76,7 +84,12 @@ export class SubscriptionUseCases {
           planId: plan.id,
           type: "SUBSCRIPTION_PAYMENT",
         },
-        line_items: [
+        line_items: plan.stripePriceId ? [
+          {
+            price: plan.stripePriceId,
+            quantity: 1,
+          }
+        ] : [
           {
             price_data: {
               currency: plan.currency.toLowerCase(),
@@ -159,6 +172,7 @@ export class SubscriptionUseCases {
           planName: plan.name,
           planInterval: plan.interval,
           planIntervalCount: plan.intervalCount.toString(),
+          stripePriceId: plan.stripePriceId || "", // Pass it for the webhook
         };
       }
 
@@ -263,7 +277,15 @@ export class SubscriptionUseCases {
       const plan = await this.subscriptionRepo.findPlanById(planId);
       if (!plan) throw new Error("Invalid subscription plan");
 
-      const trialDays = plan.trialDays ?? 7;
+      let trialDays = plan.trialDays ?? 7;
+
+      // Check if user has ever had a subscription to prevent multiple trials
+      const pastSubscription = await this.subscriptionRepo.getSubscriptionByUserId(userId);
+      if (pastSubscription) {
+        console.log(`[DEBUG] User ${userId} already had a subscription previously. Forfeiting trial days.`);
+        trialDays = 0;
+      }
+
       console.log(
         `[DEBUG] createAppSubscriptionCheckout: Plan ${plan.name} has trialDays: ${trialDays}`,
       );
@@ -339,6 +361,7 @@ export class SubscriptionUseCases {
               planInterval: plan.interval,
               planIntervalCount: plan.intervalCount.toString(),
               trialDays: trialDays.toString(),
+              stripePriceId: plan.stripePriceId || "",
             },
           });
 
@@ -373,27 +396,13 @@ export class SubscriptionUseCases {
       // NO TRIAL - Standard Subscription Creation
       console.log(`Creating subscription (No Trial) for user ${userId}`);
 
-      // Create Product for the subscription
-      const product = await this.stripeService.stripe.products.create({
-        name: plan.name,
-        description: description,
-      });
-
       const subscriptionConfig = {
         customer: customer.id,
-        items: [
+        items: plan.stripePriceId ? [
           {
-            price_data: {
-              currency: plan.currency.toLowerCase(),
-              product: product.id, // Use explicit Product ID
-              unit_amount: Math.round(plan.price * 100),
-              recurring: {
-                interval: plan.interval,
-                interval_count: plan.intervalCount,
-              },
-            },
-          },
-        ],
+            price: plan.stripePriceId,
+          }
+        ] : undefined,
         payment_behavior: "default_incomplete",
         payment_settings: { save_default_payment_method: "on_subscription" },
         expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
@@ -405,6 +414,28 @@ export class SubscriptionUseCases {
           description: description,
         },
       };
+
+      if (!plan.stripePriceId) {
+        // Fallback for old plans without stripePriceId
+        const product = await this.stripeService.stripe.products.create({
+          name: plan.name,
+          description: description,
+        });
+
+        subscriptionConfig.items = [
+          {
+            price_data: {
+              currency: plan.currency.toLowerCase(),
+              product: product.id,
+              unit_amount: Math.round(plan.price * 100),
+              recurring: {
+                interval: plan.interval,
+                interval_count: plan.intervalCount,
+              },
+            },
+          },
+        ];
+      }
 
       const subscription =
         await this.stripeService.stripe.subscriptions.create(
@@ -1676,6 +1707,19 @@ export class SubscriptionUseCases {
         throw new Error("Name, price, and interval are required");
       }
 
+      // 1. Create Product in Stripe
+      const stripeProduct = await this.stripeService.createProduct(name);
+
+      // 2. Create Price in Stripe
+      const stripePrice = await this.stripeService.createPrice(
+        stripeProduct.id,
+        price,
+        currency,
+        interval,
+        intervalCount
+      );
+
+      // 3. Save to Local DB
       const plan = await this.subscriptionRepo.createPlan({
         name,
         price,
@@ -1683,7 +1727,7 @@ export class SubscriptionUseCases {
         interval: interval.toLowerCase(),
         intervalCount,
         trialDays,
-        stripePriceId: null, // We're not using Stripe prices
+        stripePriceId: stripePrice.id,
         visible: true,
       });
 
@@ -1695,9 +1739,9 @@ export class SubscriptionUseCases {
 
   async updatePlan(planId, planData) {
     try {
-      const plan = await this.subscriptionRepo.findPlanById(planId);
-      if (!plan) {
-        throw new Error("Subscription plan not found");
+      const existingPlan = await this.subscriptionRepo.findPlanById(planId);
+      if (!existingPlan) {
+        throw new Error("Plan not found");
       }
 
       const updateData = { ...planData };
@@ -1875,20 +1919,33 @@ export class SubscriptionUseCases {
       const plan = await this.subscriptionRepo.findPlanById(planId);
       if (!plan) throw new Error("Plan not found");
 
-      // FIX: Create product first, as subscriptions.create doesn't support product_data in price_data
-      const product = await this.stripeService.stripe.products.create({
-        name: planName,
-      });
-
       const subscriptionConfig = {
         customer: customerId,
         default_payment_method: paymentMethodId,
         trial_period_days: parseInt(trialDays),
-        items: [
+        items: plan.stripePriceId ? [
+          {
+            price: plan.stripePriceId,
+          }
+        ] : undefined,
+        metadata: {
+          userId: userId,
+          planId: planId,
+          type: "APP_SUBSCRIPTION",
+        },
+      };
+
+      if (!plan.stripePriceId) {
+        // Fallback for old plans without stripePriceId
+        const product = await this.stripeService.stripe.products.create({
+          name: planName,
+        });
+
+        subscriptionConfig.items = [
           {
             price_data: {
               currency: planCurrency.toLowerCase(),
-              product: product.id, // Use the created product ID
+              product: product.id,
               unit_amount: Math.round(parseFloat(planPrice) * 100),
               recurring: {
                 interval: planInterval,
@@ -1896,13 +1953,8 @@ export class SubscriptionUseCases {
               },
             },
           },
-        ],
-        metadata: {
-          userId: userId,
-          planId: planId,
-          type: "APP_SUBSCRIPTION",
-        },
-      };
+        ];
+      }
 
       const subscription =
         await this.stripeService.stripe.subscriptions.create(
@@ -1978,6 +2030,31 @@ export class SubscriptionUseCases {
         },
       );
       throw error;
+    }
+  }
+
+  async generateBillingPortalLink(userId, returnUrl) {
+    try {
+      const user = await this.userRepo.findById(userId);
+      if (!user) throw new Error("User not found");
+
+      if (!user.stripeCustomerId) {
+        throw new Error("User does not have a Stripe customer account");
+      }
+
+      const activeSubscription = await this.subscriptionRepo.findActiveSubscriptionByUserId(userId);
+      if (!activeSubscription) {
+        throw new Error("No active subscription found. You must have an active subscription to manage billing.");
+      }
+
+      const session = await this.stripeService.createBillingPortalSession(
+        user.stripeCustomerId,
+        returnUrl || process.env.FRONTEND_URL
+      );
+
+      return session.url;
+    } catch (error) {
+      throw new Error(`Failed to generate billing portal link: ${error.message}`);
     }
   }
 }
